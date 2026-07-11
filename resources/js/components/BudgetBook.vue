@@ -14,6 +14,22 @@
           <button class="nav-btn" :disabled="fetching" @click="goNext" aria-label="Sledeći mesec">›</button>
         </div>
 
+        <div class="chat-box">
+          <div class="chat-log" ref="chatLogEl">
+            <div v-for="(msg, idx) in chatLog" :key="idx" class="chat-msg" :class="msg.role">
+              <span>{{ msg.text }}</span>
+              <div v-if="msg.confirm" class="chat-confirm">
+                <button class="add-row" @click="applyChatAction(msg)">Da</button>
+                <button class="reset-link" @click="rejectChatAction(msg)">Ne</button>
+              </div>
+            </div>
+          </div>
+          <form class="chat-input" @submit.prevent="sendChatMessage">
+            <input type="text" v-model="chatInput" placeholder="npr. potrošio sam 500 na kafu" :disabled="chatSending">
+            <button type="submit" :disabled="chatSending || !chatInput.trim()">Pošalji</button>
+          </form>
+        </div>
+
         <div class="masthead">
           <div class="eyebrow">Anno <span>{{ yearNow }}</span> · lična evidencija</div>
           <h1>Knjižica troškova</h1>
@@ -190,6 +206,17 @@
               </div>
             </div>
 
+            <div class="analyze-row">
+              <button class="add-row" :disabled="analyzing" @click="analyzeMonth">{{ analyzing ? 'Analiziram…' : '🔍 Analiziraj mesec' }}</button>
+            </div>
+            <div v-if="analysisText || analysisError" class="banner">
+              <span v-if="analysisText">{{ analysisText }}</span>
+              <span v-else>{{ analysisError }}</span>
+              <div class="banner-actions">
+                <button class="reset-link" @click="closeAnalysis">Zatvori</button>
+              </div>
+            </div>
+
             <div class="savings-line">
               Ukupna ušteđevina: <strong :class="{ flash: flash.savings }">{{ fmt(savTotal) }} RSD</strong>
               &nbsp;·&nbsp; <span>≈ {{ fmt2(savTotal / rates.eur) }} €</span>
@@ -208,7 +235,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed, watch, onMounted } from 'vue';
+import { reactive, ref, computed, watch, onMounted, nextTick } from 'vue';
 import axios from 'axios';
 
 const yearNow = new Date().getFullYear();
@@ -383,6 +410,113 @@ watch(savTotal, () => triggerFlash('savings'));
 
 watch(currentPeriod, (period) => loadState(period));
 onMounted(() => loadState(currentPeriod.value));
+
+const chatLog = reactive([]);
+const chatInput = ref('');
+const chatSending = ref(false);
+const chatLogEl = ref(null);
+
+const CHAT_ACTION_LABELS = { add_expense: 'trošak', add_income: 'primanje', add_saving: 'stavku štednje' };
+const FREQ_LABELS = { 0: 'jednokratno', 1: 'mesečno', 2: 'na 2 meseca', 3: 'na 3 meseca' };
+
+function scrollChatToBottom() {
+  nextTick(() => {
+    if (chatLogEl.value) chatLogEl.value.scrollTop = chatLogEl.value.scrollHeight;
+  });
+}
+
+async function sendChatMessage() {
+  const text = chatInput.value.trim();
+  if (!text) return;
+
+  chatLog.push({ role: 'user', text });
+  chatInput.value = '';
+  chatSending.value = true;
+  chatLog.push({ role: 'assistant', text: 'Razmišljam…' });
+  scrollChatToBottom();
+
+  try {
+    const { data } = await axios.post('/api/budget/chat', { message: text });
+    chatLog.pop();
+
+    const validActions = ['add_expense', 'add_income', 'add_saving'];
+    if (validActions.includes(data.action) && data.name && data.amount > 0) {
+      const currency = data.currency || 'RSD';
+      const freq = data.freq ?? 1;
+      const freqText = data.action === 'add_saving' ? '' : `, ${FREQ_LABELS[freq] ?? 'mesečno'}`;
+      chatLog.push({
+        role: 'assistant',
+        text: `Da dodam ${CHAT_ACTION_LABELS[data.action]} "${data.name}": ${data.amount} ${currency}${freqText}?`,
+        confirm: { action: data.action, name: data.name, amount: data.amount, currency, freq },
+      });
+    } else {
+      chatLog.push({ role: 'assistant', text: 'Nisam siguran šta si mislio/la — probaj konkretnije (npr. "potrošio sam 500 dinara na kafu").' });
+    }
+  } catch (e) {
+    chatLog.pop();
+    chatLog.push({ role: 'assistant', text: 'Nešto nije u redu, probaj ponovo.' });
+  } finally {
+    chatSending.value = false;
+    scrollChatToBottom();
+  }
+}
+
+function applyChatAction(msg) {
+  const { action, name, amount, currency, freq } = msg.confirm;
+  if (action === 'add_expense') {
+    expenses.push({ name, amount, currency, freq, active: true });
+    saveExpenses();
+  } else if (action === 'add_income') {
+    income.push({ name, amount, currency, freq, active: true });
+    saveIncome();
+  } else if (action === 'add_saving') {
+    savings.push({ name, amount, currency });
+    saveSavings();
+  }
+  msg.confirm = null;
+  chatLog.push({ role: 'assistant', text: '✓ Dodato.' });
+  scrollChatToBottom();
+}
+
+function rejectChatAction(msg) {
+  msg.confirm = null;
+  chatLog.push({ role: 'assistant', text: 'U redu, ništa nisam dodao.' });
+  scrollChatToBottom();
+}
+
+const analyzing = ref(false);
+const analysisText = ref('');
+const analysisError = ref('');
+
+async function analyzeMonth() {
+  analyzing.value = true;
+  analysisText.value = '';
+  analysisError.value = '';
+
+  try {
+    const activeExpenses = expenses
+      .filter(it => it.active)
+      .map(it => ({ name: it.name, amount: it.amount, currency: it.currency }));
+
+    const { data } = await axios.post('/api/budget/analyze', {
+      period: currentPeriod.value,
+      income_total: Math.round(incThis.value),
+      expense_total: Math.round(expThis.value),
+      net: Math.round(netThis.value),
+      expenses: activeExpenses,
+    });
+    analysisText.value = data.tip;
+  } catch (e) {
+    analysisError.value = 'Analiza trenutno nije dostupna.';
+  } finally {
+    analyzing.value = false;
+  }
+}
+
+function closeAnalysis() {
+  analysisText.value = '';
+  analysisError.value = '';
+}
 </script>
 
 <style>
@@ -606,6 +740,35 @@ onMounted(() => loadState(currentPeriod.value));
 .foot-note{ margin-top:24px; font-size:11px; font-style:italic; color:var(--ink-light); text-align:center; }
 .reset-link{ background:none; border:none; color:var(--ink-light); font-family:Georgia,serif; font-size:10.5px; font-style:italic; text-decoration:underline; cursor:pointer; padding:0; }
 
+.chat-box{
+  border:1px solid var(--ink-light); border-radius:6px; padding:10px 12px;
+  margin-bottom:22px; background:rgba(255,255,255,0.12);
+}
+.chat-log{ max-height:180px; overflow-y:auto; margin-bottom:8px; font-size:12.5px; }
+.chat-log:empty{ display:none; }
+.chat-msg{ margin-bottom:8px; }
+.chat-msg.user{ text-align:right; }
+.chat-msg.user span{ color:var(--ink); font-weight:600; }
+.chat-msg.assistant{ text-align:left; }
+.chat-msg.assistant span{ color:var(--ink-light); font-style:italic; }
+.chat-confirm{ display:flex; gap:8px; margin-top:4px; }
+.chat-confirm button{ padding:4px 10px; font-size:11.5px; margin:0; }
+.chat-input{ display:flex; gap:8px; }
+.chat-input input{
+  flex:1; font-family:Georgia,serif; font-size:13px; color:var(--ink);
+  background:transparent; border:none; border-bottom:1px solid var(--ink-light); padding:5px 2px;
+}
+.chat-input input:focus{ outline:none; border-bottom:1px solid var(--gilt); }
+.chat-input button{
+  background:none; border:1px solid var(--gilt); color:var(--ink);
+  font-family:Georgia,serif; font-variant:small-caps; font-size:12px;
+  padding:6px 14px; cursor:pointer;
+}
+.chat-input button:hover:not(:disabled){ background:rgba(184,137,43,0.12); }
+.chat-input button:disabled{ opacity:0.5; cursor:default; }
+
+.analyze-row{ text-align:center; margin:16px 0; }
+
 .flash{ animation:goldFlash 0.5s ease; }
 @keyframes goldFlash{
   0%{ background:rgba(184,137,43,0.45); }
@@ -635,6 +798,9 @@ onMounted(() => loadState(currentPeriod.value));
   .page{ padding:26px 16px 22px 16px; }
   .masthead h1{ font-size:24px; }
   .ribbon{ right:18px; }
+  .chat-log{ max-height:140px; }
+  .chat-input{ flex-wrap:wrap; }
+  .chat-input input{ min-width:0; flex-basis:100%; }
 
   .page table, .page thead, .page tbody, .page tr, .page td{ display:block; }
   .page thead{ display:none; }

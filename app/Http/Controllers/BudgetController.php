@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BudgetData;
+use App\Services\GeminiClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
@@ -86,6 +87,97 @@ class BudgetController extends Controller
         );
 
         return response()->json(['ok' => true]);
+    }
+
+    public function chat(Request $request, GeminiClient $gemini)
+    {
+        $data = $request->validate([
+            'message' => ['required', 'string', 'max:500'],
+        ]);
+
+        $schema = [
+            'type' => 'OBJECT',
+            'properties' => [
+                'action' => [
+                    'type' => 'STRING',
+                    'enum' => ['add_expense', 'add_income', 'add_saving', 'unclear'],
+                ],
+                'name' => ['type' => 'STRING'],
+                'amount' => ['type' => 'NUMBER'],
+                'currency' => ['type' => 'STRING', 'enum' => ['RSD', 'EUR', 'USD']],
+                'freq' => ['type' => 'INTEGER'],
+            ],
+            'required' => ['action'],
+        ];
+
+        $message = $data['message'];
+        $prompt = <<<PROMPT
+        Korisnik je napisao poruku o svojim finansijama na srpskom: "{$message}"
+
+        Prepoznaj da li korisnik želi da:
+        - doda trošak (add_expense)
+        - doda primanje/prihod (add_income)
+        - doda stavku štednje/imovine (add_saving)
+        - ili poruka nije jasna (unclear)
+
+        Ako je jasna, izvuci naziv stavke (name), iznos (amount, samo broj), valutu
+        (currency: RSD/EUR/USD, podrazumevano RSD ako nije rečeno), i za trošak/primanje
+        učestalost (freq: 1=mesečno, 2=na 2 meseca, 3=na 3 meseca, 0=jednokratno;
+        podrazumevano 1 ako nije rečeno). Za štednju freq nije potreban.
+        PROMPT;
+
+        try {
+            $raw = $gemini->generate($prompt, $schema);
+            $parsed = json_decode($raw, true);
+        } catch (\Throwable) {
+            return response()->json(['action' => 'unclear']);
+        }
+
+        if (! $parsed || ! isset($parsed['action'])) {
+            return response()->json(['action' => 'unclear']);
+        }
+
+        return response()->json($parsed);
+    }
+
+    public function analyze(Request $request, GeminiClient $gemini)
+    {
+        $data = $request->validate([
+            'period' => ['required', 'string', 'regex:/^\d{4}-\d{2}$/'],
+            'income_total' => ['required', 'numeric'],
+            'expense_total' => ['required', 'numeric'],
+            'net' => ['required', 'numeric'],
+            'expenses' => ['array'],
+            'expenses.*.name' => ['required_with:expenses', 'string'],
+            'expenses.*.amount' => ['required_with:expenses', 'numeric'],
+            'expenses.*.currency' => ['required_with:expenses', 'string'],
+        ]);
+
+        $expenseLines = collect($data['expenses'] ?? [])
+            ->map(fn ($it) => "- {$it['name']}: {$it['amount']} {$it['currency']}")
+            ->implode("\n");
+
+        $prompt = <<<PROMPT
+        Ti si finansijski asistent. Evo sažetka mesečnog budžeta korisnika (period {$data['period']}):
+
+        Ukupna primanja: {$data['income_total']} RSD
+        Ukupni troškovi: {$data['expense_total']} RSD
+        Neto: {$data['net']} RSD
+
+        Aktivni troškovi:
+        {$expenseLines}
+
+        Daj kratak, konkretan savet na srpskom (2-4 rečenice) o ovoj potrošnji — istakni
+        nešto specifično iz liste troškova ako je moguće, ne generičke fraze.
+        PROMPT;
+
+        try {
+            $tip = $gemini->generate($prompt);
+        } catch (\Throwable) {
+            return response()->json(['error' => 'Analiza trenutno nije dostupna.'], 502);
+        }
+
+        return response()->json(['tip' => trim($tip)]);
     }
 
     private function calculateNet(Collection $rows): ?float
