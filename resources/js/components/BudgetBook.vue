@@ -1,0 +1,654 @@
+<template>
+  <div class="tome">
+    <div class="cover">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div class="ribbon"></div>
+
+      <div class="page">
+        <div class="month-nav">
+          <button class="nav-btn" :disabled="fetching" @click="goPrev" aria-label="Prethodni mesec">‹</button>
+          <span class="month-label">{{ currentPeriodLabel }}</span>
+          <button class="nav-btn" :disabled="fetching" @click="goNext" aria-label="Sledeći mesec">›</button>
+        </div>
+
+        <div class="masthead">
+          <div class="eyebrow">Anno <span>{{ yearNow }}</span> · lična evidencija</div>
+          <h1>Knjižica troškova</h1>
+          <div class="sub">primanja, izdaci i štednja, po starom običaju</div>
+          <svg class="flourish" viewBox="0 0 120 10"><path d="M0 5 H45 M75 5 H120 M55 5 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0" stroke="#B8892B" stroke-width="1" fill="none"/></svg>
+        </div>
+
+        <div v-if="loading" class="foot-note">Učitavanje knjižice…</div>
+
+        <Transition v-else :name="navDirection === 'next' ? 'page-next' : 'page-prev'" mode="out-in">
+          <div :key="currentPeriod" class="month-content" :class="{ 'is-fetching': fetching }">
+
+            <div v-if="bannerVisible" class="banner">
+              <span>Iz {{ bannerPreviousLabel }} ti je ostalo <strong>{{ signed(bannerPreviousNet) }} RSD</strong> (neto). Dodati u štednju?</span>
+              <div class="banner-actions">
+                <input type="number" v-model.number="bannerAmount" step="1">
+                <button class="add-row" @click="confirmBanner">Dodaj u štednju</button>
+                <button class="reset-link" @click="dismissBanner">Ne, hvala</button>
+              </div>
+            </div>
+
+            <div class="section-title">Primanja</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:auto">Stavka</th>
+                  <th class="amt-col">Iznos</th>
+                  <th class="cur-col">Valuta</th>
+                  <th class="freq-col">Učestalost</th>
+                  <th class="chk-col">Akt.</th>
+                  <th class="del-col"></th>
+                </tr>
+              </thead>
+              <TransitionGroup tag="tbody" name="row">
+                <tr v-for="(item, i) in income" :key="keyFor(item)" :class="{ inactive: !item.active }">
+                  <td><input type="text" v-model="item.name" @change="saveIncome"></td>
+                  <td class="amt-col"><input type="number" v-model.number="item.amount" step="1" @change="saveIncome"></td>
+                  <td class="cur-col">
+                    <select v-model="item.currency" @change="saveIncome">
+                      <option value="RSD">RSD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  </td>
+                  <td class="freq-col">
+                    <select v-model.number="item.freq" @change="saveIncome">
+                      <option :value="1">mesečno</option>
+                      <option :value="2">na 2 meseca</option>
+                      <option :value="3">na 3 meseca</option>
+                      <option :value="0">jednokratno</option>
+                    </select>
+                  </td>
+                  <td class="chk-col"><input type="checkbox" v-model="item.active" @change="saveIncome"></td>
+                  <td class="del-col"><button class="del-btn" @click="removeRow(income, i, saveIncome)">×</button></td>
+                </tr>
+              </TransitionGroup>
+            </table>
+            <button class="add-row" @click="addRow(income, 'Novo primanje', saveIncome)">+ upiši primanje</button>
+
+            <div class="section-title">Troškovi</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:auto">Stavka</th>
+                  <th class="amt-col">Iznos</th>
+                  <th class="cur-col">Valuta</th>
+                  <th class="freq-col">Učestalost</th>
+                  <th class="chk-col">Akt.</th>
+                  <th class="del-col"></th>
+                </tr>
+              </thead>
+              <TransitionGroup tag="tbody" name="row">
+                <tr v-for="(item, i) in expenses" :key="keyFor(item)" :class="{ inactive: !item.active }">
+                  <td><input type="text" v-model="item.name" @change="saveExpenses"></td>
+                  <td class="amt-col"><input type="number" v-model.number="item.amount" step="1" @change="saveExpenses"></td>
+                  <td class="cur-col">
+                    <select v-model="item.currency" @change="saveExpenses">
+                      <option value="RSD">RSD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  </td>
+                  <td class="freq-col">
+                    <select v-model.number="item.freq" @change="saveExpenses">
+                      <option :value="1">mesečno</option>
+                      <option :value="2">na 2 meseca</option>
+                      <option :value="3">na 3 meseca</option>
+                      <option :value="0">jednokratno</option>
+                    </select>
+                  </td>
+                  <td class="chk-col"><input type="checkbox" v-model="item.active" @change="saveExpenses"></td>
+                  <td class="del-col"><button class="del-btn" @click="removeRow(expenses, i, saveExpenses)">×</button></td>
+                </tr>
+              </TransitionGroup>
+            </table>
+            <button class="add-row" @click="addRow(expenses, 'Nova stavka', saveExpenses)">+ upiši trošak</button>
+
+            <div class="section-title">Štednja i imovina</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:auto">Stavka</th>
+                  <th class="amt-col">Iznos</th>
+                  <th class="cur-col">Valuta</th>
+                  <th class="del-col"></th>
+                </tr>
+              </thead>
+              <TransitionGroup tag="tbody" name="row">
+                <tr v-for="(item, i) in savings" :key="keyFor(item)">
+                  <td><input type="text" v-model="item.name" @change="saveSavings"></td>
+                  <td class="amt-col"><input type="number" v-model.number="item.amount" step="1" @change="saveSavings"></td>
+                  <td class="cur-col">
+                    <select v-model="item.currency" @change="saveSavings">
+                      <option value="RSD">RSD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  </td>
+                  <td class="del-col"><button class="del-btn" @click="removeRow(savings, i, saveSavings)">×</button></td>
+                </tr>
+              </TransitionGroup>
+            </table>
+            <button class="add-row" @click="addSavingsRow">+ upiši stavku štednje</button>
+
+            <div class="rates">
+              <div>
+                <label>1 USD =</label>
+                <input type="number" v-model.number="rates.usd" step="0.01" @change="saveRates">
+              </div>
+              <div>
+                <label>1 EUR =</label>
+                <input type="number" v-model.number="rates.eur" step="0.01" @change="saveRates">
+              </div>
+              <div class="note">srednji kurs NBS, po volji izmeni</div>
+            </div>
+
+            <div class="section-title">Konverter valuta</div>
+            <div class="converter">
+              <div>
+                <label>Iznos</label>
+                <input type="number" v-model.number="conv.amount" step="1">
+              </div>
+              <div>
+                <label>Iz</label>
+                <select v-model="conv.from">
+                  <option value="RSD">RSD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
+              <div class="eq">=</div>
+              <div>
+                <label>U</label>
+                <select v-model="conv.to">
+                  <option value="EUR">EUR</option>
+                  <option value="RSD">RSD</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
+              <div class="result">{{ convResult }}</div>
+            </div>
+
+            <div class="totals">
+              <div class="totals-text">
+                <div class="row"><span class="lbl">primanja ovog meseca</span><span class="val" :class="{ flash: flash.income }">{{ fmt(incThis) }} RSD</span></div>
+                <div class="row"><span class="lbl">troškovi ovog meseca</span><span class="val" :class="{ flash: flash.expense }">{{ fmt(expThis) }} RSD</span></div>
+                <div class="row main"><span class="lbl">neto ovog meseca</span><span class="val" :class="[netThis >= 0 ? 'pos' : 'neg', { flash: flash.net }]">{{ signed(netThis) }} RSD</span></div>
+                <div class="row"><span class="lbl">prosečan neto mesečno</span><span class="val" :class="netAvg >= 0 ? 'pos' : 'neg'">{{ signed(netAvg) }} RSD</span></div>
+              </div>
+              <div class="seal-wrap">
+                <div class="lbl">neto</div>
+                <div class="val" :class="{ flash: flash.net }">{{ signed(netThis) }}</div>
+                <div class="cur">RSD ovog meseca</div>
+              </div>
+            </div>
+
+            <div class="savings-line">
+              Ukupna ušteđevina: <strong :class="{ flash: flash.savings }">{{ fmt(savTotal) }} RSD</strong>
+              &nbsp;·&nbsp; <span>≈ {{ fmt2(savTotal / rates.eur) }} €</span>
+              &nbsp;·&nbsp; <span>≈ {{ fmt2(savTotal / rates.usd) }} $</span>
+            </div>
+
+            <div class="foot-note">
+              Isključi "Akt." za stavke koje ovog meseca ne dospevaju.
+              &nbsp;·&nbsp; <button class="reset-link" @click="resetAll">vrati na početne vrednosti</button>
+            </div>
+          </div>
+        </Transition>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { reactive, ref, computed, watch, onMounted } from 'vue';
+import axios from 'axios';
+
+const yearNow = new Date().getFullYear();
+const loading = ref(true);
+const fetching = ref(false);
+
+const MONTH_NAMES = ['Januar', 'Februar', 'Mart', 'April', 'Maj', 'Jun', 'Jul', 'Avgust', 'Septembar', 'Oktobar', 'Novembar', 'Decembar'];
+
+function currentYearMonth() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+function shiftPeriod(period, delta) {
+  const [y, m] = period.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+function periodLabel(period) {
+  const [y, m] = period.split('-').map(Number);
+  return MONTH_NAMES[m - 1] + ' ' + y + '.';
+}
+
+const currentPeriod = ref(currentYearMonth());
+const navDirection = ref('next');
+const currentPeriodLabel = computed(() => periodLabel(currentPeriod.value));
+
+function goPrev() { navDirection.value = 'prev'; currentPeriod.value = shiftPeriod(currentPeriod.value, -1); }
+function goNext() { navDirection.value = 'next'; currentPeriod.value = shiftPeriod(currentPeriod.value, 1); }
+
+const defaultExpenses = [
+  { name: 'Teretana', amount: 3200, currency: 'RSD', freq: 1, active: true },
+  { name: 'A1', amount: 1700, currency: 'RSD', freq: 1, active: true },
+  { name: 'Internet', amount: 2700, currency: 'RSD', freq: 1, active: true },
+  { name: 'Claude', amount: 20, currency: 'USD', freq: 1, active: true },
+  { name: 'Rata kredita (do avgusta)', amount: 7200, currency: 'RSD', freq: 1, active: true },
+  { name: 'Google Drive', amount: 240, currency: 'RSD', freq: 1, active: true },
+  { name: 'Graza', amount: 100, currency: 'EUR', freq: 2, active: true },
+];
+const defaultIncome = [
+  { name: 'Plata', amount: 0, currency: 'RSD', freq: 1, active: true },
+];
+const defaultSavings = [
+  { name: 'Ušteđevina', amount: 200000, currency: 'RSD' },
+  { name: 'Deonice', amount: 350, currency: 'USD' },
+];
+const defaultRates = { usd: 102.76, eur: 117.36 };
+
+const expenses = reactive(clone(defaultExpenses));
+const income = reactive(clone(defaultIncome));
+const savings = reactive(clone(defaultSavings));
+const rates = reactive(clone(defaultRates));
+const conv = reactive({ amount: 1000, from: 'RSD', to: 'EUR' });
+
+function clone(x) { return JSON.parse(JSON.stringify(x)); }
+function replaceArray(target, source) { target.splice(0, target.length, ...source); }
+
+const rowIdMap = new WeakMap();
+let rowIdCounter = 0;
+function keyFor(item) {
+  if (!rowIdMap.has(item)) rowIdMap.set(item, ++rowIdCounter);
+  return rowIdMap.get(item);
+}
+
+const bannerVisible = ref(false);
+const bannerPreviousNet = ref(0);
+const bannerAmount = ref(0);
+const bannerPreviousLabel = ref('');
+const dismissedPeriods = new Set();
+
+async function loadState(period) {
+  fetching.value = true;
+  bannerVisible.value = false;
+
+  replaceArray(expenses, clone(defaultExpenses));
+  replaceArray(income, clone(defaultIncome));
+  Object.assign(rates, clone(defaultRates));
+
+  try {
+    const { data } = await axios.get('/api/budget', { params: { period } });
+    const d = data.data || {};
+    if (d['expense-items']) replaceArray(expenses, JSON.parse(d['expense-items']));
+    if (d['income-items']) replaceArray(income, JSON.parse(d['income-items']));
+    if (d['expense-rates']) Object.assign(rates, JSON.parse(d['expense-rates']));
+    if (d['savings-items']) replaceArray(savings, JSON.parse(d['savings-items']));
+
+    if (data.is_new_period && data.previous_net !== null && data.template_period && !dismissedPeriods.has(period)) {
+      bannerPreviousNet.value = data.previous_net;
+      bannerAmount.value = Math.round(data.previous_net);
+      bannerPreviousLabel.value = periodLabel(data.template_period);
+      bannerVisible.value = data.previous_net > 0;
+    }
+  } catch (e) {
+    // nema sacuvanih podataka jos — ostaju podrazumevane vrednosti
+  } finally {
+    fetching.value = false;
+    loading.value = false;
+  }
+}
+
+function confirmBanner() {
+  savings.push({ name: 'Preneto iz ' + bannerPreviousLabel.value, amount: Math.round(bannerAmount.value) || 0, currency: 'RSD' });
+  saveSavings();
+  bannerVisible.value = false;
+  dismissedPeriods.add(currentPeriod.value);
+}
+function dismissBanner() {
+  bannerVisible.value = false;
+  dismissedPeriods.add(currentPeriod.value);
+}
+
+function persist(key, value, period = null) {
+  const payload = { key, value: JSON.stringify(value) };
+  if (period) payload.period = period;
+  axios.post('/api/budget', payload);
+}
+function saveExpenses() { persist('expense-items', expenses, currentPeriod.value); }
+function saveIncome() { persist('income-items', income, currentPeriod.value); }
+function saveSavings() { persist('savings-items', savings); }
+function saveRates() { persist('expense-rates', rates, currentPeriod.value); }
+
+function addRow(arr, name, save) {
+  arr.push({ name, amount: 0, currency: 'RSD', freq: 1, active: true });
+  save();
+}
+function addSavingsRow() {
+  savings.push({ name: 'Nova stavka', amount: 0, currency: 'RSD' });
+  saveSavings();
+}
+function removeRow(arr, i, save) {
+  arr.splice(i, 1);
+  save();
+}
+
+function resetAll() {
+  replaceArray(expenses, clone(defaultExpenses));
+  replaceArray(income, clone(defaultIncome));
+  replaceArray(savings, clone(defaultSavings));
+  Object.assign(rates, clone(defaultRates));
+  saveExpenses(); saveIncome(); saveSavings(); saveRates();
+}
+
+function toRSD(amount, currency) {
+  if (currency === 'USD') return amount * rates.usd;
+  if (currency === 'EUR') return amount * rates.eur;
+  return amount;
+}
+function fmt(n) { return Math.round(n).toLocaleString('sr-RS'); }
+function fmt2(n) { return n.toLocaleString('sr-RS', { maximumFractionDigits: 2 }); }
+function signed(n) { return (n >= 0 ? '+' : '') + fmt(n); }
+
+const expThis = computed(() => expenses.reduce((sum, it) => it.active ? sum + toRSD(it.amount, it.currency) : sum, 0));
+const incThis = computed(() => income.reduce((sum, it) => it.active ? sum + toRSD(it.amount, it.currency) : sum, 0));
+const expAvg = computed(() => expenses.reduce((sum, it) => {
+  if (!it.active) return sum;
+  const r = toRSD(it.amount, it.currency);
+  return sum + (it.freq > 0 ? r / it.freq : r);
+}, 0));
+const incAvg = computed(() => income.reduce((sum, it) => {
+  if (!it.active) return sum;
+  const r = toRSD(it.amount, it.currency);
+  return sum + (it.freq > 0 ? r / it.freq : r);
+}, 0));
+const savTotal = computed(() => savings.reduce((sum, it) => sum + toRSD(it.amount, it.currency), 0));
+const netThis = computed(() => incThis.value - expThis.value);
+const netAvg = computed(() => incAvg.value - expAvg.value);
+
+const convResult = computed(() => {
+  const amount = conv.amount || 0;
+  const rsd = conv.from === 'RSD' ? amount : (conv.from === 'USD' ? amount * rates.usd : amount * rates.eur);
+  const result = conv.to === 'RSD' ? rsd : (conv.to === 'USD' ? rsd / rates.usd : rsd / rates.eur);
+  return fmt2(result) + ' ' + conv.to;
+});
+
+const flash = reactive({ income: false, expense: false, net: false, savings: false });
+function triggerFlash(key) {
+  flash[key] = true;
+  setTimeout(() => { flash[key] = false; }, 500);
+}
+watch(incThis, () => triggerFlash('income'));
+watch(expThis, () => triggerFlash('expense'));
+watch(netThis, () => triggerFlash('net'));
+watch(savTotal, () => triggerFlash('savings'));
+
+watch(currentPeriod, (period) => loadState(period));
+onMounted(() => loadState(currentPeriod.value));
+</script>
+
+<style>
+:root{
+  --leather:#2E1B14;
+  --leather-hi:#4A2A1E;
+  --parchment:#EFE1BE;
+  --parchment-dark:#E2D0A2;
+  --ink:#3B2A18;
+  --ink-light:#7A6440;
+  --gilt:#B8892B;
+  --gilt-bright:#D8AE4C;
+  --seal:#7A1F1F;
+  --seal-hi:#9C3232;
+  --pos:#2E5B3E;
+}
+.tome{ width:100%; max-width:780px; position:relative; margin:0 auto; }
+
+.cover{
+  background:linear-gradient(135deg, var(--leather-hi), var(--leather) 40%, #1F1109 100%);
+  border-radius:6px;
+  padding:20px;
+  box-shadow:
+    0 30px 60px -20px rgba(0,0,0,0.7),
+    inset 0 0 0 2px rgba(184,137,43,0.35),
+    inset 0 0 40px rgba(0,0,0,0.55);
+  position:relative;
+}
+.cover::before{
+  content:"";
+  position:absolute;
+  inset:8px;
+  border:1px solid rgba(184,137,43,0.45);
+  border-radius:3px;
+  pointer-events:none;
+}
+.corner{ position:absolute; width:26px; height:26px; border:1.5px solid var(--gilt); opacity:0.75; }
+.corner.tl{ top:14px; left:14px; border-right:none; border-bottom:none; }
+.corner.tr{ top:14px; right:14px; border-left:none; border-bottom:none; }
+.corner.bl{ bottom:14px; left:14px; border-right:none; border-top:none; }
+.corner.br{ bottom:14px; right:14px; border-left:none; border-top:none; }
+
+.ribbon{
+  position:absolute;
+  top:0; right:38px;
+  width:20px; height:64px;
+  background:linear-gradient(180deg, var(--seal-hi), var(--seal));
+  clip-path:polygon(0 0,100% 0,100% 100%,50% 78%,0 100%);
+  box-shadow:0 3px 8px rgba(0,0,0,0.4);
+}
+
+.page{
+  background:
+    radial-gradient(circle at 12% 18%, rgba(120,90,40,0.10), transparent 40%),
+    radial-gradient(circle at 85% 75%, rgba(120,90,40,0.10), transparent 45%),
+    radial-gradient(circle at 60% 10%, rgba(120,90,40,0.08), transparent 35%),
+    var(--parchment);
+  padding:38px 34px 30px 34px;
+  box-shadow:inset 0 0 60px rgba(120,90,40,0.25), 0 2px 0 rgba(0,0,0,0.15);
+  position:relative;
+  overflow:hidden;
+  font-family:'EB Garamond',Georgia,'Cambria','Times New Roman',serif;
+  color:var(--ink);
+}
+.page::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  box-shadow:inset 0 0 0 10px var(--parchment), inset 0 0 0 11px rgba(120,90,40,0.3);
+  pointer-events:none;
+}
+
+.month-nav{
+  display:flex; align-items:center; justify-content:center; gap:18px;
+  margin-bottom:6px;
+}
+.month-nav .nav-btn{
+  background:none; border:1px solid var(--gilt); color:var(--ink);
+  font-family:Georgia,serif; font-size:16px; line-height:1; width:28px; height:28px;
+  cursor:pointer; border-radius:50%;
+}
+.month-nav .nav-btn:hover:not(:disabled){ background:rgba(184,137,43,0.15); }
+.month-nav .nav-btn:disabled{ opacity:0.4; cursor:default; }
+.month-nav .month-label{
+  font-family:'IM Fell English SC',Georgia,serif; text-transform:uppercase; letter-spacing:1.5px;
+  font-size:13px; color:var(--gilt); min-width:130px; text-align:center;
+}
+
+.banner{
+  display:flex; flex-direction:column; gap:8px;
+  background:rgba(184,137,43,0.14); border:1px solid var(--gilt);
+  border-radius:4px; padding:12px 16px; margin-bottom:20px;
+  font-size:12.5px;
+}
+.banner-actions{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.banner-actions input{
+  width:100px; font-family:Georgia,serif; font-size:13px; color:var(--ink);
+  background:transparent; border:none; border-bottom:1px solid var(--ink-light); padding:3px 2px;
+}
+.banner-actions input:focus{ outline:none; border-bottom:1px solid var(--gilt); }
+.banner .add-row{ margin:0; padding:6px 12px; }
+.banner .reset-link{ margin:0; }
+
+.masthead{ text-align:center; border-bottom:2px solid var(--ink); padding-bottom:16px; margin-bottom:22px; position:relative; }
+.masthead .eyebrow{ font-size:12px; letter-spacing:3px; text-transform:uppercase; color:var(--gilt); margin-bottom:6px; font-family:'IM Fell English SC',Georgia,serif; }
+.masthead h1{ margin:0; font-size:30px; letter-spacing:2px; color:var(--ink); font-family:'Cinzel',Georgia,serif; font-weight:900; }
+.masthead h1::first-letter{ font-size:48px; color:var(--seal); font-family:'Cinzel',Georgia,serif; }
+.masthead .sub{ font-size:12px; font-style:italic; color:var(--ink-light); margin-top:6px; }
+.flourish{ margin:8px auto 0 auto; width:120px; height:10px; opacity:0.6; }
+
+.section-title{
+  text-align:center;
+  font-size:14px;
+  text-transform:uppercase;
+  letter-spacing:2px;
+  color:var(--gilt);
+  font-family:'IM Fell English SC',Georgia,serif;
+  margin:28px 0 12px 0;
+  position:relative;
+}
+.section-title::before, .section-title::after{
+  content:"—";
+  color:var(--ink-light);
+  margin:0 10px;
+}
+.section-title:first-of-type{ margin-top:0; }
+
+.page table{ width:100%; border-collapse:collapse; margin-bottom:6px; }
+.page thead th{
+  font-size:10px; text-transform:uppercase; letter-spacing:1px;
+  color:var(--ink-light); font-variant:small-caps;
+  text-align:left; padding:0 6px 8px 6px;
+  border-bottom:1px solid var(--ink-light);
+}
+.page tbody td{ padding:7px 6px; border-bottom:1px dotted rgba(59,42,24,0.4); vertical-align:middle; }
+.page tbody tr.inactive{ opacity:0.4; }
+
+.page input[type=text], .page input[type=number]{
+  font-family:Georgia,serif; font-size:13.5px; color:var(--ink);
+  background:transparent; border:none; border-bottom:1px solid transparent;
+  width:100%; padding:3px 2px;
+}
+.page input[type=text]:focus, .page input[type=number]:focus{ outline:none; border-bottom:1px solid var(--gilt); }
+.page select{
+  font-family:Georgia,serif; font-size:12.5px; color:var(--ink);
+  background:transparent; border:none; border-bottom:1px solid transparent; padding:3px 0;
+}
+.page select:focus{ outline:none; border-bottom:1px solid var(--gilt); }
+
+.amt-col{ width:90px; }
+.cur-col{ width:64px; }
+.freq-col{ width:120px; }
+.chk-col{ width:36px; text-align:center; }
+.del-col{ width:26px; text-align:center; }
+
+.del-btn{ background:none; border:none; color:var(--seal); font-size:16px; cursor:pointer; font-family:Georgia,serif; }
+.del-btn:hover{ text-decoration:underline; }
+
+.add-row{
+  margin:12px 0 8px 0;
+  background:none;
+  border:1px solid var(--gilt);
+  color:var(--ink);
+  font-family:Georgia,serif;
+  font-variant:small-caps;
+  font-size:12.5px;
+  padding:8px 14px;
+  cursor:pointer;
+  letter-spacing:0.5px;
+}
+.add-row:hover{ background:rgba(184,137,43,0.12); }
+
+.rates{
+  display:flex; gap:26px; flex-wrap:wrap;
+  border-top:1px solid var(--ink-light); border-bottom:1px solid var(--ink-light);
+  padding:16px 2px; margin:26px 0 20px 0; font-size:12.5px;
+}
+.rates label{ color:var(--ink-light); display:block; margin-bottom:3px; font-size:10px; text-transform:uppercase; letter-spacing:0.6px; font-variant:small-caps; }
+.rates input{ width:80px; border-bottom:1px solid var(--ink-light); }
+.rates .note{ font-style:italic; color:var(--ink-light); font-size:11.5px; align-self:flex-end; }
+
+.converter{
+  display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;
+  padding-bottom:22px; margin-bottom:24px;
+  border-bottom:1px solid var(--ink-light); font-size:12.5px;
+}
+.converter label{ display:block; color:var(--ink-light); font-size:10px; text-transform:uppercase; margin-bottom:3px; letter-spacing:0.6px; font-variant:small-caps; }
+.converter input[type=number]{ width:100px; border-bottom:1px solid var(--ink-light); }
+.converter select{ border-bottom:1px solid var(--ink-light); }
+.converter .eq{ font-size:15px; padding-bottom:4px; color:var(--ink-light); }
+.converter .result{ font-weight:bold; padding-bottom:4px; font-size:14px; }
+
+.totals{ display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+.totals-text{ max-width:340px; }
+.totals-text .row{ display:flex; justify-content:space-between; font-size:13px; padding:5px 0; border-bottom:1px dotted rgba(59,42,24,0.4); }
+.totals-text .row .lbl{ color:var(--ink-light); font-variant:small-caps; }
+.totals-text .row.main .lbl, .totals-text .row.main .val{ color:var(--ink); font-weight:bold; }
+.totals-text .row .val.pos{ color:var(--pos); }
+.totals-text .row .val.neg{ color:var(--seal); }
+
+.seal-wrap{
+  width:132px; height:132px; border-radius:50%; flex-shrink:0; position:relative;
+  background:radial-gradient(circle at 35% 30%, var(--seal-hi), var(--seal) 55%, #4E1414 100%);
+  box-shadow:0 10px 18px -6px rgba(0,0,0,0.55), inset 0 2px 4px rgba(255,255,255,0.25), inset 0 -6px 10px rgba(0,0,0,0.4);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  color:#F1D9A8; text-align:center; transform:rotate(-4deg);
+}
+.seal-wrap::before{ content:""; position:absolute; inset:9px; border:1px solid rgba(241,217,168,0.5); border-radius:50%; }
+.seal-wrap .lbl{ font-size:9.5px; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:5px; font-family:'IM Fell English SC',Georgia,serif; }
+.seal-wrap .val{ font-size:15px; font-weight:bold; line-height:1.2; font-family:Georgia,serif; border-radius:3px; }
+.seal-wrap .cur{ font-size:8.5px; margin-top:4px; font-variant:small-caps; }
+
+.savings-line{
+  font-size:12.5px; color:var(--ink-light); text-align:center;
+  margin-top:18px; padding-top:16px; border-top:1px dashed var(--ink-light);
+  font-variant:small-caps;
+}
+.savings-line strong{ color:var(--ink); border-radius:3px; }
+.savings-line span{ color:var(--ink); }
+
+.foot-note{ margin-top:24px; font-size:11px; font-style:italic; color:var(--ink-light); text-align:center; }
+.reset-link{ background:none; border:none; color:var(--ink-light); font-family:Georgia,serif; font-size:10.5px; font-style:italic; text-decoration:underline; cursor:pointer; padding:0; }
+
+.flash{ animation:goldFlash 0.5s ease; }
+@keyframes goldFlash{
+  0%{ background:rgba(184,137,43,0.45); }
+  100%{ background:transparent; }
+}
+
+.month-content{ transition:opacity 0.15s ease; }
+.month-content.is-fetching{ opacity:0.5; pointer-events:none; }
+
+.page-next-enter-active, .page-next-leave-active,
+.page-prev-enter-active, .page-prev-leave-active{
+  transition:transform 0.32s ease, opacity 0.32s ease;
+}
+.page-next-enter-from{ transform:translateX(28px); opacity:0; }
+.page-next-leave-to{ transform:translateX(-28px); opacity:0; }
+.page-prev-enter-from{ transform:translateX(-28px); opacity:0; }
+.page-prev-leave-to{ transform:translateX(28px); opacity:0; }
+
+.fade-enter-active, .fade-leave-active{ transition:opacity 0.2s ease; }
+.fade-enter-from, .fade-leave-to{ opacity:0; }
+
+.row-enter-active, .row-leave-active{ transition:opacity 0.25s ease, transform 0.25s ease; }
+.row-enter-from, .row-leave-to{ opacity:0; transform:translateY(-6px); }
+.row-leave-active{ position:relative; }
+
+@media (max-width:480px){
+  .page{ padding:28px 18px 24px 18px; }
+  .amt-col{ width:64px; }
+  .freq-col{ width:96px; }
+  thead th:nth-child(3){ display:none; }
+  tbody td:nth-child(3){ display:none; }
+  .masthead h1{ font-size:24px; }
+  .ribbon{ right:18px; }
+}
+</style>
