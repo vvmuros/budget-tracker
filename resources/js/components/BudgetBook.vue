@@ -49,16 +49,16 @@
               </thead>
               <TransitionGroup tag="tbody" name="row">
                 <tr v-for="(item, i) in income" :key="keyFor(item)" :class="{ inactive: !item.active }">
-                  <td><input type="text" v-model="item.name" @change="saveIncome"></td>
-                  <td class="amt-col"><input type="number" v-model.number="item.amount" step="1" @change="saveIncome"></td>
-                  <td class="cur-col">
+                  <td class="cell-name"><input type="text" v-model="item.name" @change="saveIncome"></td>
+                  <td class="amt-col" data-label="Iznos"><input type="number" v-model.number="item.amount" step="1" @change="saveIncome"></td>
+                  <td class="cur-col" data-label="Valuta">
                     <select v-model="item.currency" @change="saveIncome">
                       <option value="RSD">RSD</option>
                       <option value="EUR">EUR</option>
                       <option value="USD">USD</option>
                     </select>
                   </td>
-                  <td class="freq-col">
+                  <td class="freq-col" data-label="Učestalost">
                     <select v-model.number="item.freq" @change="saveIncome">
                       <option :value="1">mesečno</option>
                       <option :value="2">na 2 meseca</option>
@@ -66,7 +66,7 @@
                       <option :value="0">jednokratno</option>
                     </select>
                   </td>
-                  <td class="chk-col"><input type="checkbox" v-model="item.active" @change="saveIncome"></td>
+                  <td class="chk-col" data-label="Aktivno"><input type="checkbox" v-model="item.active" @change="saveIncome"></td>
                   <td class="del-col"><button class="del-btn" @click="removeRow(income, i, saveIncome)">×</button></td>
                 </tr>
               </TransitionGroup>
@@ -87,16 +87,16 @@
               </thead>
               <TransitionGroup tag="tbody" name="row">
                 <tr v-for="(item, i) in expenses" :key="keyFor(item)" :class="{ inactive: !item.active }">
-                  <td><input type="text" v-model="item.name" @change="saveExpenses"></td>
-                  <td class="amt-col"><input type="number" v-model.number="item.amount" step="1" @change="saveExpenses"></td>
-                  <td class="cur-col">
+                  <td class="cell-name"><input type="text" v-model="item.name" @change="saveExpenses"></td>
+                  <td class="amt-col" data-label="Iznos"><input type="number" v-model.number="item.amount" step="1" @change="saveExpenses"></td>
+                  <td class="cur-col" data-label="Valuta">
                     <select v-model="item.currency" @change="saveExpenses">
                       <option value="RSD">RSD</option>
                       <option value="EUR">EUR</option>
                       <option value="USD">USD</option>
                     </select>
                   </td>
-                  <td class="freq-col">
+                  <td class="freq-col" data-label="Učestalost">
                     <select v-model.number="item.freq" @change="saveExpenses">
                       <option :value="1">mesečno</option>
                       <option :value="2">na 2 meseca</option>
@@ -104,7 +104,7 @@
                       <option :value="0">jednokratno</option>
                     </select>
                   </td>
-                  <td class="chk-col"><input type="checkbox" v-model="item.active" @change="saveExpenses"></td>
+                  <td class="chk-col" data-label="Aktivno"><input type="checkbox" v-model="item.active" @change="saveExpenses"></td>
                   <td class="del-col"><button class="del-btn" @click="removeRow(expenses, i, saveExpenses)">×</button></td>
                 </tr>
               </TransitionGroup>
@@ -123,9 +123,9 @@
               </thead>
               <TransitionGroup tag="tbody" name="row">
                 <tr v-for="(item, i) in savings" :key="keyFor(item)">
-                  <td><input type="text" v-model="item.name" @change="saveSavings"></td>
-                  <td class="amt-col"><input type="number" v-model.number="item.amount" step="1" @change="saveSavings"></td>
-                  <td class="cur-col">
+                  <td class="cell-name"><input type="text" v-model="item.name" @change="saveSavings"></td>
+                  <td class="amt-col" data-label="Iznos"><input type="number" v-model.number="item.amount" step="1" @change="saveSavings"></td>
+                  <td class="cur-col" data-label="Valuta">
                     <select v-model="item.currency" @change="saveSavings">
                       <option value="RSD">RSD</option>
                       <option value="EUR">EUR</option>
@@ -642,13 +642,48 @@ onMounted(() => loadState(currentPeriod.value));
 .row-enter-from, .row-leave-to{ opacity:0; transform:translateY(-6px); }
 .row-leave-active{ position:relative; }
 
-@media (max-width:480px){
-  .page{ padding:28px 18px 24px 18px; }
-  .amt-col{ width:64px; }
-  .freq-col{ width:96px; }
-  thead th:nth-child(3){ display:none; }
-  tbody td:nth-child(3){ display:none; }
+@media (max-width:640px){
+  .page{ padding:26px 16px 22px 16px; }
   .masthead h1{ font-size:24px; }
   .ribbon{ right:18px; }
+
+  .page table, .page thead, .page tbody, .page tr, .page td{ display:block; }
+  .page thead{ display:none; }
+  .amt-col, .cur-col, .freq-col, .chk-col, .del-col{ width:auto; }
+
+  .page tbody tr{
+    position:relative;
+    border:1px solid rgba(122,100,64,0.35);
+    border-radius:6px;
+    padding:12px 40px 4px 12px;
+    margin-bottom:10px;
+    background:rgba(255,255,255,0.18);
+  }
+  .page tbody tr.inactive{ background:rgba(255,255,255,0.08); }
+
+  .page tbody td{ padding:7px 0; }
+  .page td[data-label]{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .page td[data-label]::before{
+    content:attr(data-label);
+    font-size:10px; text-transform:uppercase; letter-spacing:0.6px;
+    color:var(--ink-light); font-variant:small-caps; flex-shrink:0;
+  }
+  .page td[data-label] input, .page td[data-label] select{ text-align:right; }
+  .page td[data-label]:last-of-type{ border-bottom:none; }
+
+  .page td.cell-name{ font-size:15px; }
+  .page td.cell-name input{ font-size:15px; font-weight:600; }
+
+  .page td.del-col{
+    position:absolute; top:10px; right:8px;
+    width:auto; padding:0; border:none; text-align:right;
+  }
+  .page td.del-col .del-btn{ font-size:18px; }
+
+  .totals{ flex-direction:column; align-items:stretch; gap:14px; }
+  .totals-text{ max-width:none; }
+  .seal-wrap{ margin:0 auto; }
 }
 </style>

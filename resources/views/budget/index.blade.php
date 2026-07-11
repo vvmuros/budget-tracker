@@ -2,6 +2,7 @@
 <html lang="sr">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <title>Knjižica troškova — antikvarno izdanje</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,16 +21,20 @@
   }
   .user-bar{
     width:100%; max-width:780px; margin-bottom:14px;
-    display:flex; justify-content:space-between; align-items:center;
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;
     font-family:'EB Garamond',Georgia,serif; color:#D8AE4C; font-size:13px;
   }
-  .user-bar form{ margin:0; }
+  .user-bar span{ word-break:break-word; }
+  .user-bar form{ margin:0; flex-shrink:0; }
   .user-bar button{
     background:none; border:1px solid #B8892B; color:#EFE1BE;
     font-family:Georgia,serif; font-variant:small-caps; font-size:12px;
-    padding:5px 12px; cursor:pointer;
+    padding:6px 14px; cursor:pointer;
   }
   .user-bar button:hover{ background:rgba(184,137,43,0.2); }
+  @media (max-width:480px){
+    body{ padding:20px 10px; }
+  }
 </style>
 </head>
 <body>
