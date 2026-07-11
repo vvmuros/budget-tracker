@@ -238,22 +238,11 @@ const currentPeriodLabel = computed(() => periodLabel(currentPeriod.value));
 function goPrev() { navDirection.value = 'prev'; currentPeriod.value = shiftPeriod(currentPeriod.value, -1); }
 function goNext() { navDirection.value = 'next'; currentPeriod.value = shiftPeriod(currentPeriod.value, 1); }
 
-const defaultExpenses = [
-  { name: 'Teretana', amount: 3200, currency: 'RSD', freq: 1, active: true },
-  { name: 'A1', amount: 1700, currency: 'RSD', freq: 1, active: true },
-  { name: 'Internet', amount: 2700, currency: 'RSD', freq: 1, active: true },
-  { name: 'Claude', amount: 20, currency: 'USD', freq: 1, active: true },
-  { name: 'Rata kredita (do avgusta)', amount: 7200, currency: 'RSD', freq: 1, active: true },
-  { name: 'Google Drive', amount: 240, currency: 'RSD', freq: 1, active: true },
-  { name: 'Graza', amount: 100, currency: 'EUR', freq: 2, active: true },
-];
+const defaultExpenses = [];
 const defaultIncome = [
   { name: 'Plata', amount: 0, currency: 'RSD', freq: 1, active: true },
 ];
-const defaultSavings = [
-  { name: 'Ušteđevina', amount: 200000, currency: 'RSD' },
-  { name: 'Deonice', amount: 350, currency: 'USD' },
-];
+const defaultSavings = [];
 const defaultRates = { usd: 102.76, eur: 117.36 };
 
 const expenses = reactive(clone(defaultExpenses));
