@@ -97,12 +97,13 @@
                   <th class="amt-col">Iznos</th>
                   <th class="cur-col">Valuta</th>
                   <th class="freq-col">Učestalost</th>
+                  <th class="end-col">Do meseca</th>
                   <th class="chk-col">Akt.</th>
                   <th class="del-col"></th>
                 </tr>
               </thead>
               <TransitionGroup tag="tbody" name="row">
-                <tr v-for="(item, i) in expenses" :key="keyFor(item)" :class="{ inactive: !item.active }">
+                <tr v-for="(item, i) in expenses" :key="keyFor(item)" :class="{ inactive: !isExpenseActive(item) }">
                   <td class="cell-name"><input type="text" v-model="item.name" @change="saveExpenses"></td>
                   <td class="amt-col" data-label="Iznos"><input type="number" v-model.number="item.amount" step="1" @change="saveExpenses"></td>
                   <td class="cur-col" data-label="Valuta">
@@ -120,6 +121,7 @@
                       <option :value="0">jednokratno</option>
                     </select>
                   </td>
+                  <td class="end-col" data-label="Do meseca"><input type="month" v-model="item.endPeriod" @change="saveExpenses"></td>
                   <td class="chk-col" data-label="Aktivno"><input type="checkbox" v-model="item.active" @change="saveExpenses"></td>
                   <td class="del-col"><button class="del-btn" @click="removeRow(expenses, i, saveExpenses)">×</button></td>
                 </tr>
@@ -346,7 +348,7 @@ function saveSavings() { persist('savings-items', savings); }
 function saveRates() { persist('expense-rates', rates, currentPeriod.value); }
 
 function addRow(arr, name, save) {
-  arr.push({ name, amount: 0, currency: 'RSD', freq: 1, active: true });
+  arr.push({ name, amount: 0, currency: 'RSD', freq: 1, active: true, endPeriod: null });
   save();
 }
 function addSavingsRow() {
@@ -375,10 +377,14 @@ function fmt(n) { return Math.round(n).toLocaleString('sr-RS'); }
 function fmt2(n) { return n.toLocaleString('sr-RS', { maximumFractionDigits: 2 }); }
 function signed(n) { return (n >= 0 ? '+' : '') + fmt(n); }
 
-const expThis = computed(() => expenses.reduce((sum, it) => it.active ? sum + toRSD(it.amount, it.currency) : sum, 0));
+function isExpenseActive(item) {
+  return item.active && (!item.endPeriod || currentPeriod.value <= item.endPeriod);
+}
+
+const expThis = computed(() => expenses.reduce((sum, it) => isExpenseActive(it) ? sum + toRSD(it.amount, it.currency) : sum, 0));
 const incThis = computed(() => income.reduce((sum, it) => it.active ? sum + toRSD(it.amount, it.currency) : sum, 0));
 const expAvg = computed(() => expenses.reduce((sum, it) => {
-  if (!it.active) return sum;
+  if (!isExpenseActive(it)) return sum;
   const r = toRSD(it.amount, it.currency);
   return sum + (it.freq > 0 ? r / it.freq : r);
 }, 0));
@@ -669,8 +675,10 @@ function closeAnalysis() {
 .amt-col{ width:90px; }
 .cur-col{ width:64px; }
 .freq-col{ width:120px; }
+.end-col{ width:120px; }
 .chk-col{ width:36px; text-align:center; }
 .del-col{ width:26px; text-align:center; }
+.end-col input[type=month]{ font-size:12px; }
 
 .del-btn{ background:none; border:none; color:var(--seal); font-size:16px; cursor:pointer; font-family:Georgia,serif; }
 .del-btn:hover{ text-decoration:underline; }
@@ -804,7 +812,7 @@ function closeAnalysis() {
 
   .page table, .page thead, .page tbody, .page tr, .page td{ display:block; }
   .page thead{ display:none; }
-  .amt-col, .cur-col, .freq-col, .chk-col, .del-col{ width:auto; }
+  .amt-col, .cur-col, .freq-col, .end-col, .chk-col, .del-col{ width:auto; }
 
   .page tbody tr{
     position:relative;
