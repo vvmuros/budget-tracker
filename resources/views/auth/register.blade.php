@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="manifest" href="/manifest.json">
+<script>
+  (function(){
+    var saved = localStorage.getItem('theme');
+    var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
 <meta name="theme-color" content="#2E1B14">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <title>Registracija — Knjižica troškova</title>
@@ -15,6 +22,16 @@
     --leather:#2E1B14; --leather-hi:#4A2A1E;
     --parchment:#EFE1BE; --ink:#3B2A18; --ink-light:#7A6440;
     --gilt:#B8892B; --seal:#7A1F1F;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --parchment:#241A12; --ink:#EDE0C8; --ink-light:#B8A588;
+      --gilt:#C9A244; --seal:#C6605F;
+    }
+  }
+  :root[data-theme="dark"]{
+    --parchment:#241A12; --ink:#EDE0C8; --ink-light:#B8A588;
+    --gilt:#C9A244; --seal:#C6605F;
   }
   *{box-sizing:border-box;}
   body{
@@ -69,5 +86,10 @@
     </form>
     <div class="foot">Već imaš nalog? <a href="{{ route('login') }}">Prijavi se</a></div>
   </div>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  </script>
 </body>
 </html>

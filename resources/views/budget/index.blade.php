@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <link rel="manifest" href="/manifest.json">
+<script>
+  (function(){
+    var saved = localStorage.getItem('theme');
+    var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
 <meta name="theme-color" content="#2E1B14">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <title>Knjižica troškova — antikvarno izdanje</title>

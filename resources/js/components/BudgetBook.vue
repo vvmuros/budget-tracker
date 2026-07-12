@@ -9,12 +9,24 @@
 
       <div class="page">
         <div class="month-nav">
-          <button class="nav-btn" :disabled="fetching" @click="goPrev" aria-label="Prethodni mesec">‹</button>
+          <button class="nav-btn" :disabled="fetching" @click="goPrev" aria-label="Prethodni mesec">
+            <svg viewBox="0 0 16 16" class="icon"><path d="M10 3 L5 8 L10 13" /></svg>
+          </button>
           <span class="month-label">{{ currentPeriodLabel }}</span>
-          <button class="nav-btn" :disabled="fetching" @click="goNext" aria-label="Sledeći mesec">›</button>
+          <button class="nav-btn" :disabled="fetching" @click="goNext" aria-label="Sledeći mesec">
+            <svg viewBox="0 0 16 16" class="icon"><path d="M6 3 L11 8 L6 13" /></svg>
+          </button>
         </div>
         <div class="year-toggle-row">
-          <button class="reset-link" @click="toggleYearView">{{ showYearView ? '← Nazad na mesec' : '📊 Analiza godine' }}</button>
+          <button class="reset-link icon-link" @click="toggleYearView">
+            <svg v-if="!showYearView" viewBox="0 0 16 16" class="icon"><path d="M2 13 V8 M6 13 V4 M10 13 V6 M14 13 V2" /></svg>
+            <svg v-else viewBox="0 0 16 16" class="icon"><path d="M9 3 L4 8 L9 13" /></svg>
+            {{ showYearView ? 'Nazad na mesec' : 'Analiza godine' }}
+          </button>
+          <button class="theme-toggle" @click="toggleTheme" aria-label="Promeni temu">
+            <svg v-if="isDark" viewBox="0 0 16 16" class="icon"><circle cx="8" cy="8" r="3" /><path d="M8 1.5 V3 M8 13 V14.5 M1.5 8 H3 M13 8 H14.5 M3.3 3.3 L4.4 4.4 M11.6 11.6 L12.7 12.7 M3.3 12.7 L4.4 11.6 M11.6 4.4 L12.7 3.3" /></svg>
+            <svg v-else viewBox="0 0 16 16" class="icon"><path d="M13.5 9.8 A5.5 5.5 0 1 1 6.2 2.5 A4.3 4.3 0 0 0 13.5 9.8 Z" /></svg>
+          </button>
         </div>
 
         <div class="chat-box">
@@ -32,8 +44,13 @@
             <button
               v-if="voiceSupported" type="button" class="mic-btn" :class="{ listening: isListening }"
               :disabled="chatSending" @click="toggleVoiceInput" aria-label="Govorom unesi trošak"
-            >{{ isListening ? '⏹' : '🎤' }}</button>
-            <button type="button" class="mic-btn" :disabled="chatSending || scanningReceipt" @click="triggerReceiptPicker" aria-label="Skeniraj račun">📷</button>
+            >
+              <svg v-if="!isListening" viewBox="0 0 16 16" class="icon"><path d="M8 2.5 a2 2 0 0 1 2 2 v3.5 a2 2 0 0 1 -4 0 v-3.5 a2 2 0 0 1 2 -2 Z" /><path d="M4.5 8 a3.5 3.5 0 0 0 7 0 M8 11.5 V13.5 M6 13.5 H10" /></svg>
+              <svg v-else viewBox="0 0 16 16" class="icon"><rect x="4" y="4" width="8" height="8" rx="1" /></svg>
+            </button>
+            <button type="button" class="mic-btn" :disabled="chatSending || scanningReceipt" @click="triggerReceiptPicker" aria-label="Skeniraj račun">
+              <svg viewBox="0 0 16 16" class="icon"><path d="M2 6 a1 1 0 0 1 1 -1 h1.5 l1 -1.5 h5 l1 1.5 H13 a1 1 0 0 1 1 1 v6 a1 1 0 0 1 -1 1 H3 a1 1 0 0 1 -1 -1 Z" /><circle cx="8" cy="9" r="2.3" /></svg>
+            </button>
             <input ref="receiptInputEl" type="file" accept="image/*" capture="environment" class="receipt-input" @change="onReceiptSelected">
             <button type="submit" :disabled="chatSending || isListening || !chatInput.trim()">Pošalji</button>
           </form>
@@ -143,11 +160,11 @@
                     </select>
                   </td>
                   <td class="chk-col" data-label="Aktivno"><input type="checkbox" v-model="item.active" @change="saveIncome"></td>
-                  <td class="del-col"><button class="del-btn" @click="removeRow(income, item, saveIncome)">×</button></td>
+                  <td class="del-col"><button class="del-btn" @click="removeRow(income, item, saveIncome)" aria-label="Obriši red"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
                 </tr>
               </TransitionGroup>
             </table>
-            <button class="add-row" @click="addRow(income, 'Novo primanje', saveIncome)">+ upiši primanje</button>
+            <button class="add-row" @click="addRow(income, 'Novo primanje', saveIncome)"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> upiši primanje</button>
             <button v-if="oneTimeIncomeCount > 0" class="reset-link load-more-btn" @click="showOneTimeIncome = !showOneTimeIncome">
               {{ showOneTimeIncome ? 'Sakrij jednokratna primanja' : 'Prikaži jednokratna primanja' }} ({{ oneTimeIncomeCount }})
             </button>
@@ -195,11 +212,11 @@
                     </select>
                   </td>
                   <td class="chk-col" data-label="Aktivno"><input type="checkbox" v-model="item.active" @change="saveExpenses"></td>
-                  <td class="del-col"><button class="del-btn" @click="removeRow(expenses, item, saveExpenses)">×</button></td>
+                  <td class="del-col"><button class="del-btn" @click="removeRow(expenses, item, saveExpenses)" aria-label="Obriši red"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
                 </tr>
               </TransitionGroup>
             </table>
-            <button class="add-row" @click="addRow(expenses, 'Nova stavka', saveExpenses)">+ upiši trošak</button>
+            <button class="add-row" @click="addRow(expenses, 'Nova stavka', saveExpenses)"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> upiši trošak</button>
             <button v-if="oneTimeExpensesCount > 0" class="reset-link load-more-btn" @click="showOneTimeExpenses = !showOneTimeExpenses">
               {{ showOneTimeExpenses ? 'Sakrij jednokratne troškove' : 'Prikaži jednokratne troškove' }} ({{ oneTimeExpensesCount }})
             </button>
@@ -244,11 +261,11 @@
                       <option v-for="cat in SAVINGS_CATEGORIES" :key="cat" :value="cat">{{ cat }}</option>
                     </select>
                   </td>
-                  <td class="del-col"><button class="del-btn" @click="removeRow(savings, item, saveSavings)">×</button></td>
+                  <td class="del-col"><button class="del-btn" @click="removeRow(savings, item, saveSavings)" aria-label="Obriši red"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
                 </tr>
               </TransitionGroup>
             </table>
-            <button class="add-row" @click="addSavingsRow">+ upiši stavku štednje</button>
+            <button class="add-row" @click="addSavingsRow"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> upiši stavku štednje</button>
 
             <div class="rates">
               <div>
@@ -303,7 +320,10 @@
             </div>
 
             <div class="analyze-row">
-              <button class="add-row" :disabled="analyzing" @click="analyzeMonth">{{ analyzing ? 'Analiziram…' : '🔍 Analiziraj mesec' }}</button>
+              <button class="add-row" :disabled="analyzing" @click="analyzeMonth">
+                <svg viewBox="0 0 16 16" class="icon"><circle cx="7" cy="7" r="4.5" /><path d="M10.2 10.2 L14 14" /></svg>
+                {{ analyzing ? 'Analiziram…' : 'Analiziraj mesec' }}
+              </button>
             </div>
             <div v-if="analysisText || analysisError" class="banner">
               <span v-if="analysisText">{{ analysisText }}</span>
@@ -556,6 +576,15 @@ watch(savTotal, () => triggerFlash('savings'));
 
 watch(currentPeriod, (period) => loadState(period));
 onMounted(() => loadState(currentPeriod.value));
+
+const isDark = ref(document.documentElement.getAttribute('data-theme') === 'dark');
+
+function toggleTheme() {
+  isDark.value = !isDark.value;
+  const theme = isDark.value ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+}
 
 const chatLog = reactive([]);
 const chatInput = ref('');
@@ -858,6 +887,39 @@ const yearChart = computed(() => {
   --seal:#7A1F1F;
   --seal-hi:#9C3232;
   --pos:#2E5B3E;
+  --card-tint:rgba(255,255,255,0.18);
+  --card-tint-dim:rgba(255,255,255,0.08);
+  --panel-tint:rgba(255,255,255,0.12);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --parchment:#241A12;
+    --parchment-dark:#1C130D;
+    --ink:#EDE0C8;
+    --ink-light:#B8A588;
+    --gilt:#C9A244;
+    --gilt-bright:#E8C468;
+    --seal:#C6605F;
+    --seal-hi:#D97A78;
+    --pos:#5FAE7C;
+    --card-tint:rgba(0,0,0,0.22);
+    --card-tint-dim:rgba(0,0,0,0.12);
+    --panel-tint:rgba(0,0,0,0.18);
+  }
+}
+:root[data-theme="dark"]{
+  --parchment:#241A12;
+  --parchment-dark:#1C130D;
+  --ink:#EDE0C8;
+  --ink-light:#B8A588;
+  --gilt:#C9A244;
+  --gilt-bright:#E8C468;
+  --seal:#C6605F;
+  --seal-hi:#D97A78;
+  --pos:#5FAE7C;
+  --card-tint:rgba(0,0,0,0.22);
+  --card-tint-dim:rgba(0,0,0,0.12);
+  --panel-tint:rgba(0,0,0,0.18);
 }
 .tome{ width:100%; max-width:780px; position:relative; margin:0 auto; }
 
@@ -906,6 +968,7 @@ const yearChart = computed(() => {
   overflow:hidden;
   font-family:'EB Garamond',Georgia,'Cambria','Times New Roman',serif;
   color:var(--ink);
+  font-variant-numeric:tabular-nums;
 }
 .page::after{
   content:"";
@@ -919,13 +982,23 @@ const yearChart = computed(() => {
   display:flex; align-items:center; justify-content:center; gap:18px;
   margin-bottom:6px;
 }
+.icon{
+  width:14px; height:14px; display:inline-block; vertical-align:middle;
+  fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round;
+}
+.icon circle, .icon rect{ fill:none; stroke:currentColor; stroke-width:1.6; }
+
 .month-nav .nav-btn{
   background:none; border:1px solid var(--gilt); color:var(--ink);
-  font-family:Georgia,serif; font-size:16px; line-height:1; width:28px; height:28px;
-  cursor:pointer; border-radius:50%;
+  display:inline-flex; align-items:center; justify-content:center;
+  width:28px; height:28px; cursor:pointer; border-radius:50%;
 }
 .month-nav .nav-btn:hover:not(:disabled){ background:rgba(184,137,43,0.15); }
 .month-nav .nav-btn:disabled{ opacity:0.4; cursor:default; }
+.month-nav .nav-btn .icon{ width:12px; height:12px; }
+
+.icon-link{ display:inline-flex; align-items:center; gap:5px; }
+.icon-link .icon{ color:var(--ink-light); }
 .month-nav .month-label{
   font-family:'IM Fell English SC',Georgia,serif; text-transform:uppercase; letter-spacing:1.5px;
   font-size:13px; color:var(--gilt); min-width:130px; text-align:center;
@@ -1003,8 +1076,9 @@ const yearChart = computed(() => {
 .del-col{ width:26px; text-align:center; }
 .end-col input[type=month]{ font-size:12px; }
 
-.del-btn{ background:none; border:none; color:var(--seal); font-size:16px; cursor:pointer; font-family:Georgia,serif; }
-.del-btn:hover{ text-decoration:underline; }
+.del-btn{ background:none; border:none; color:var(--seal); cursor:pointer; display:inline-flex; padding:4px; }
+.del-btn:hover{ opacity:0.7; }
+.del-btn .icon{ width:13px; height:13px; }
 
 .add-row{
   margin:12px 0 8px 0;
@@ -1017,8 +1091,12 @@ const yearChart = computed(() => {
   padding:8px 14px;
   cursor:pointer;
   letter-spacing:0.5px;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
 }
-.add-row:hover{ background:rgba(184,137,43,0.12); }
+.add-row:hover:not(:disabled){ background:rgba(184,137,43,0.12); }
+.add-row .icon{ color:var(--gilt); }
 
 .chart-section{ margin:18px 0 26px 0; }
 .cat-bar-row{
@@ -1037,7 +1115,15 @@ const yearChart = computed(() => {
 }
 .cat-bar-pct{ color:var(--ink-light); opacity:0.8; }
 
-.year-toggle-row{ text-align:center; margin-bottom:6px; }
+.year-toggle-row{ display:flex; align-items:center; justify-content:center; gap:16px; margin-bottom:6px; position:relative; }
+.theme-toggle{
+  position:absolute; right:0; top:50%; transform:translateY(-50%);
+  background:none; border:1px solid var(--gilt); color:var(--gilt);
+  width:26px; height:26px; border-radius:50%; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center;
+}
+.theme-toggle:hover{ background:rgba(184,137,43,0.15); }
+.theme-toggle .icon{ width:13px; height:13px; }
 
 .year-view{ padding-top:4px; }
 .year-legend{ display:flex; justify-content:center; gap:22px; margin:10px 0 16px 0; font-size:12px; color:var(--ink); }
@@ -1111,7 +1197,7 @@ const yearChart = computed(() => {
 
 .chat-box{
   border:1px solid var(--ink-light); border-radius:6px; padding:10px 12px;
-  margin-bottom:22px; background:rgba(255,255,255,0.12);
+  margin-bottom:22px; background:var(--panel-tint);
 }
 .chat-log{ max-height:180px; overflow-y:auto; margin-bottom:8px; font-size:12.5px; }
 .chat-log:empty{ display:none; }
@@ -1193,9 +1279,9 @@ const yearChart = computed(() => {
     border-radius:6px;
     padding:12px 40px 4px 12px;
     margin-bottom:10px;
-    background:rgba(255,255,255,0.18);
+    background:var(--card-tint);
   }
-  .page tbody tr.inactive{ background:rgba(255,255,255,0.08); }
+  .page tbody tr.inactive{ background:var(--card-tint-dim); }
 
   .page tbody td{ padding:7px 0; }
   .page td[data-label]{
@@ -1222,7 +1308,7 @@ const yearChart = computed(() => {
     position:absolute; top:10px; right:8px;
     width:auto; padding:0; border:none; text-align:right;
   }
-  .page td.del-col .del-btn{ font-size:18px; }
+  .page td.del-col .del-btn .icon{ width:16px; height:16px; }
 
   .totals{ flex-direction:column; align-items:stretch; gap:14px; }
   .totals-text{ max-width:none; }
