@@ -37,7 +37,12 @@ class AuthController extends Controller
             'password' => Hash::make($data['password']),
         ]);
 
-        event(new Registered($user));
+        try {
+            event(new Registered($user));
+        } catch (\Throwable $e) {
+            report($e);
+            session()->flash('verification_send_failed', true);
+        }
 
         Auth::login($user);
         $request->session()->regenerate();
@@ -83,7 +88,15 @@ class AuthController extends Controller
         $request->validate(['email' => ['required', 'string', 'email']]);
         $lang = $request->cookie('lang', 'sr');
 
-        $status = Password::sendResetLink($request->only('email'));
+        try {
+            $status = Password::sendResetLink($request->only('email'));
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->withErrors(['email' => $lang === 'en'
+                ? "We couldn't send that email right now. Please try again shortly."
+                : 'Trenutno ne možemo poslati mejl. Pokušaj ponovo za koji trenutak.']);
+        }
 
         if ($status === Password::RESET_LINK_SENT) {
             return back()->with('status', $this->passwordStatusMessage($status, $lang));
@@ -144,7 +157,15 @@ class AuthController extends Controller
             return redirect()->route('budget.index');
         }
 
-        $request->user()->sendEmailVerificationNotification();
+        try {
+            $request->user()->sendEmailVerificationNotification();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->withErrors(['email' => $lang === 'en'
+                ? "We couldn't send that email right now. Please try again shortly."
+                : 'Trenutno ne možemo poslati mejl. Pokušaj ponovo za koji trenutak.']);
+        }
 
         return back()->with('status', $lang === 'en'
             ? 'A new verification link has been sent to your email.'

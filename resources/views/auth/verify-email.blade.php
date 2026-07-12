@@ -15,6 +15,10 @@ $t = [
     ],
     'resend' => ['sr' => 'Pošalji ponovo', 'en' => 'Resend email'],
     'logout' => ['sr' => 'Odjavi se', 'en' => 'Log out'],
+    'send_failed' => [
+        'sr' => 'Nismo uspeli da pošaljemo mejl za potvrdu maločas. Probaj dugme ispod da pošalješ ponovo.',
+        'en' => "We couldn't send the verification email just now. Try the button below to resend it.",
+    ],
 ];
 ?>
 <!DOCTYPE html>
@@ -93,9 +97,16 @@ $t = [
     @if (session('status'))
       <div class="status">{{ session('status') }}</div>
     @endif
+    @if ($errors->any())
+      <div class="body-text2" style="color:var(--seal);">{{ $errors->first() }}</div>
+    @endif
 
-    <div class="body-text">{{ $t['body'][$lang] }} <strong>{{ auth()->user()->email }}</strong>.</div>
-    <div class="body-text2">{{ $t['body2'][$lang] }}</div>
+    @if (session('verification_send_failed'))
+      <div class="body-text2" style="color:var(--seal);">{{ $t['send_failed'][$lang] }}</div>
+    @else
+      <div class="body-text">{{ $t['body'][$lang] }} <strong>{{ auth()->user()->email }}</strong>.</div>
+      <div class="body-text2">{{ $t['body2'][$lang] }}</div>
+    @endif
 
     <form method="POST" action="{{ route('verification.send') }}">
       @csrf
