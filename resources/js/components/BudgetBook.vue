@@ -186,7 +186,7 @@
                     </select>
                   </td>
                   <td class="freq-col" :data-label="t('frequency')">
-                    <select v-model.number="item.freq" @change="saveIncome">
+                    <select v-model.number="item.freq" @change="onIncomeFreqChange(item)">
                       <option :value="1">{{ t('monthly') }}</option>
                       <option :value="2">{{ t('every2Months') }}</option>
                       <option :value="3">{{ t('every3Months') }}</option>
@@ -232,7 +232,7 @@
                     </select>
                   </td>
                   <td class="freq-col" :data-label="t('frequency')">
-                    <select v-model.number="item.freq" @change="saveExpenses">
+                    <select v-model.number="item.freq" @change="onExpenseFreqChange(item)">
                       <option :value="1">{{ t('monthly') }}</option>
                       <option :value="2">{{ t('every2Months') }}</option>
                       <option :value="3">{{ t('every3Months') }}</option>
@@ -792,6 +792,15 @@ const visibleExpenses = computed(() => {
   const recurring = expenses.filter(it => it.freq !== 0);
   return showOneTimeExpenses.value ? [...recurring, ...expenses.filter(it => it.freq === 0)] : recurring;
 });
+function onExpenseFreqChange(item) {
+  if (item.freq === 0) showOneTimeExpenses.value = true;
+  saveExpenses();
+}
+function onIncomeFreqChange(item) {
+  if (item.freq === 0) showOneTimeIncome.value = true;
+  saveIncome();
+}
+
 const visibleIncome = computed(() => {
   const recurring = income.filter(it => it.freq !== 0);
   return showOneTimeIncome.value ? [...recurring, ...income.filter(it => it.freq === 0)] : recurring;
