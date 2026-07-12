@@ -98,6 +98,7 @@
                   <th class="cur-col">Valuta</th>
                   <th class="freq-col">Učestalost</th>
                   <th class="end-col">Do meseca</th>
+                  <th class="cat-col">Kategorija</th>
                   <th class="chk-col">Akt.</th>
                   <th class="del-col"></th>
                 </tr>
@@ -122,12 +123,27 @@
                     </select>
                   </td>
                   <td class="end-col" data-label="Do meseca"><input type="month" v-model="item.endPeriod" @change="saveExpenses"></td>
+                  <td class="cat-col" data-label="Kategorija">
+                    <select v-model="item.category" @change="saveExpenses">
+                      <option v-for="cat in EXPENSE_CATEGORIES" :key="cat" :value="cat">{{ cat }}</option>
+                    </select>
+                  </td>
                   <td class="chk-col" data-label="Aktivno"><input type="checkbox" v-model="item.active" @change="saveExpenses"></td>
                   <td class="del-col"><button class="del-btn" @click="removeRow(expenses, i, saveExpenses)">×</button></td>
                 </tr>
               </TransitionGroup>
             </table>
             <button class="add-row" @click="addRow(expenses, 'Nova stavka', saveExpenses)">+ upiši trošak</button>
+
+            <div class="chart-section" v-if="categoryBreakdown.length">
+              <div class="cat-bar-row" v-for="slice in categoryBreakdown" :key="slice.category">
+                <div class="cat-bar-label">{{ slice.category }}</div>
+                <div class="cat-bar-track">
+                  <div class="cat-bar-fill" :style="{ width: slice.pct + '%', background: slice.color }"></div>
+                </div>
+                <div class="cat-bar-value">{{ fmt(slice.amount) }} RSD <span class="cat-bar-pct">({{ slice.pct.toFixed(0) }}%)</span></div>
+              </div>
+            </div>
 
             <div class="section-title">Štednja i imovina</div>
             <table>
@@ -136,6 +152,7 @@
                   <th style="width:auto">Stavka</th>
                   <th class="amt-col">Iznos</th>
                   <th class="cur-col">Valuta</th>
+                  <th class="cat-col">Kategorija</th>
                   <th class="del-col"></th>
                 </tr>
               </thead>
@@ -148,6 +165,11 @@
                       <option value="RSD">RSD</option>
                       <option value="EUR">EUR</option>
                       <option value="USD">USD</option>
+                    </select>
+                  </td>
+                  <td class="cat-col" data-label="Kategorija">
+                    <select v-model="item.category" @change="saveSavings">
+                      <option v-for="cat in SAVINGS_CATEGORIES" :key="cat" :value="cat">{{ cat }}</option>
                     </select>
                   </td>
                   <td class="del-col"><button class="del-btn" @click="removeRow(savings, i, saveSavings)">×</button></td>
@@ -274,6 +296,10 @@ const defaultIncome = [
 const defaultSavings = [];
 const defaultRates = { usd: 102.76, eur: 117.36 };
 
+const EXPENSE_CATEGORIES = ['Stanovanje', 'Hrana', 'Prevoz', 'Zdravlje', 'Zabava', 'Računi', 'Otplate', 'Ostalo'];
+const SAVINGS_CATEGORIES = ['Gotovina', 'Štednja', 'Investicije', 'Nekretnine', 'Ostalo'];
+const CATEGORY_COLORS = ['#96690A', '#9C3232', '#1F7A4D', '#B85C1F', '#2D5F9E', '#0D8F82', '#7A3F99', '#914A1E'];
+
 const expenses = reactive(clone(defaultExpenses));
 const income = reactive(clone(defaultIncome));
 const savings = reactive(clone(defaultSavings));
@@ -307,10 +333,10 @@ async function loadState(period) {
   try {
     const { data } = await axios.get('/api/budget', { params: { period } });
     const d = data.data || {};
-    if (d['expense-items']) replaceArray(expenses, JSON.parse(d['expense-items']));
+    if (d['expense-items']) replaceArray(expenses, JSON.parse(d['expense-items']).map(it => ({ category: 'Ostalo', ...it })));
     if (d['income-items']) replaceArray(income, JSON.parse(d['income-items']));
     if (d['expense-rates']) Object.assign(rates, JSON.parse(d['expense-rates']));
-    if (d['savings-items']) replaceArray(savings, JSON.parse(d['savings-items']));
+    if (d['savings-items']) replaceArray(savings, JSON.parse(d['savings-items']).map(it => ({ category: 'Ostalo', ...it })));
 
     if (data.is_new_period && data.previous_net !== null && data.template_period && !dismissedPeriods.has(period)) {
       bannerPreviousNet.value = data.previous_net;
@@ -327,7 +353,7 @@ async function loadState(period) {
 }
 
 function confirmBanner() {
-  savings.push({ name: 'Preneto iz ' + bannerPreviousLabel.value, amount: Math.round(bannerAmount.value) || 0, currency: 'RSD' });
+  savings.push({ name: 'Preneto iz ' + bannerPreviousLabel.value, amount: Math.round(bannerAmount.value) || 0, currency: 'RSD', category: 'Štednja' });
   saveSavings();
   bannerVisible.value = false;
   dismissedPeriods.add(currentPeriod.value);
@@ -348,11 +374,11 @@ function saveSavings() { persist('savings-items', savings); }
 function saveRates() { persist('expense-rates', rates, currentPeriod.value); }
 
 function addRow(arr, name, save) {
-  arr.push({ name, amount: 0, currency: 'RSD', freq: 1, active: true, endPeriod: null });
+  arr.push({ name, amount: 0, currency: 'RSD', freq: 1, active: true, endPeriod: null, category: 'Ostalo' });
   save();
 }
 function addSavingsRow() {
-  savings.push({ name: 'Nova stavka', amount: 0, currency: 'RSD' });
+  savings.push({ name: 'Nova stavka', amount: 0, currency: 'RSD', category: 'Ostalo' });
   saveSavings();
 }
 function removeRow(arr, i, save) {
@@ -396,6 +422,27 @@ const incAvg = computed(() => income.reduce((sum, it) => {
 const savTotal = computed(() => savings.reduce((sum, it) => sum + toRSD(it.amount, it.currency), 0));
 const netThis = computed(() => incThis.value - expThis.value);
 const netAvg = computed(() => incAvg.value - expAvg.value);
+
+const categoryBreakdown = computed(() => {
+  const totals = {};
+  expenses.forEach(it => {
+    if (!isExpenseActive(it)) return;
+    const cat = it.category || 'Ostalo';
+    totals[cat] = (totals[cat] || 0) + toRSD(it.amount, it.currency);
+  });
+
+  const total = Object.values(totals).reduce((sum, v) => sum + v, 0);
+  if (total <= 0) return [];
+
+  return Object.entries(totals)
+    .map(([category, amount]) => ({
+      category,
+      amount,
+      pct: (amount / total) * 100,
+      color: CATEGORY_COLORS[EXPENSE_CATEGORIES.indexOf(category)] ?? CATEGORY_COLORS[CATEGORY_COLORS.length - 1],
+    }))
+    .sort((a, b) => b.amount - a.amount);
+});
 
 const convResult = computed(() => {
   const amount = conv.amount || 0;
@@ -470,13 +517,13 @@ async function sendChatMessage() {
 function applyChatAction(msg) {
   const { action, name, amount, currency, freq } = msg.confirm;
   if (action === 'add_expense') {
-    expenses.push({ name, amount, currency, freq, active: true });
+    expenses.push({ name, amount, currency, freq, active: true, endPeriod: null, category: 'Ostalo' });
     saveExpenses();
   } else if (action === 'add_income') {
     income.push({ name, amount, currency, freq, active: true });
     saveIncome();
   } else if (action === 'add_saving') {
-    savings.push({ name, amount, currency });
+    savings.push({ name, amount, currency, category: 'Ostalo' });
     saveSavings();
   }
   msg.confirm = null;
@@ -676,6 +723,7 @@ function closeAnalysis() {
 .cur-col{ width:64px; }
 .freq-col{ width:120px; }
 .end-col{ width:120px; }
+.cat-col{ width:110px; }
 .chk-col{ width:36px; text-align:center; }
 .del-col{ width:26px; text-align:center; }
 .end-col input[type=month]{ font-size:12px; }
@@ -696,6 +744,23 @@ function closeAnalysis() {
   letter-spacing:0.5px;
 }
 .add-row:hover{ background:rgba(184,137,43,0.12); }
+
+.chart-section{ margin:18px 0 26px 0; }
+.cat-bar-row{
+  display:flex; align-items:center; gap:10px;
+  margin-bottom:2px; padding:3px 0;
+}
+.cat-bar-label{
+  width:88px; flex-shrink:0; font-size:11.5px; color:var(--ink);
+  font-variant:small-caps; text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.cat-bar-track{ flex:1; height:16px; background:rgba(59,42,24,0.08); border-radius:0 4px 4px 0; overflow:hidden; }
+.cat-bar-fill{ height:100%; border-radius:0 4px 4px 0; }
+.cat-bar-value{
+  width:150px; flex-shrink:0; font-size:11.5px; color:var(--ink-light);
+  text-align:left; white-space:nowrap;
+}
+.cat-bar-pct{ color:var(--ink-light); opacity:0.8; }
 
 .rates{
   display:flex; gap:26px; flex-wrap:wrap;
@@ -810,9 +875,14 @@ function closeAnalysis() {
   .chat-input{ flex-wrap:wrap; }
   .chat-input input{ min-width:0; flex-basis:100%; }
 
+  .cat-bar-row{ flex-wrap:wrap; }
+  .cat-bar-label{ width:auto; text-align:left; flex:1 1 auto; }
+  .cat-bar-track{ flex-basis:100%; order:3; }
+  .cat-bar-value{ width:auto; text-align:right; }
+
   .page table, .page thead, .page tbody, .page tr, .page td{ display:block; }
   .page thead{ display:none; }
-  .amt-col, .cur-col, .freq-col, .end-col, .chk-col, .del-col{ width:auto; }
+  .amt-col, .cur-col, .freq-col, .end-col, .cat-col, .chk-col, .del-col{ width:auto; }
 
   .page tbody tr{
     position:relative;

@@ -38,27 +38,31 @@ class BudgetController extends Controller
         $missingKeys = array_diff(self::PERIODIC_KEYS, $exactRows->keys()->all());
         $isNewPeriod = count($missingKeys) > 0;
         $previousNet = null;
+        $templatePeriod = null;
+        $templateValues = [];
 
-        if ($isNewPeriod) {
-            $templatePeriod = $user->budgetData()
-                ->whereIn('key', self::PERIODIC_KEYS)
+        foreach ($missingKeys as $key) {
+            $row = $user->budgetData()
+                ->where('key', $key)
                 ->where('period', '<', $period)
-                ->max('period');
+                ->orderByDesc('period')
+                ->first();
 
-            if ($templatePeriod) {
-                $templateRows = $user->budgetData()
-                    ->whereIn('key', self::PERIODIC_KEYS)
-                    ->where('period', $templatePeriod)
-                    ->pluck('value', 'key');
-
-                foreach ($missingKeys as $key) {
-                    if ($templateRows->has($key)) {
-                        $result[$key] = $templateRows[$key];
-                    }
+            if ($row) {
+                $result[$key] = $row->value;
+                $templateValues[$key] = $row->value;
+                if (! $templatePeriod || $row->period > $templatePeriod) {
+                    $templatePeriod = $row->period;
                 }
-
-                $previousNet = $this->calculateNet($templateRows);
             }
+        }
+
+        if ($isNewPeriod && isset($templateValues['income-items'], $templateValues['expense-items'])) {
+            $previousNet = $this->calculateNet(collect([
+                'income-items' => $templateValues['income-items'],
+                'expense-items' => $templateValues['expense-items'],
+                'expense-rates' => $templateValues['expense-rates'] ?? '{}',
+            ]));
         }
 
         return response()->json([
@@ -66,6 +70,7 @@ class BudgetController extends Controller
             'period' => $period,
             'is_new_period' => $isNewPeriod,
             'previous_net' => $previousNet,
+            'template_period' => $templatePeriod,
         ]);
     }
 
