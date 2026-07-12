@@ -480,12 +480,9 @@ const TRANSLATIONS = {
     receiptError: 'Nešto nije u redu sa slikom, probaj ponovo.',
     imageLoadError: 'Neuspešno učitavanje slike.',
     analysisUnavailable: 'Analiza trenutno nije dostupna.',
-    voiceNoMatch: 'Nisam razumeo šta si rekao/la — probaj ponovo, sporije i jasnije.',
     voiceNotAllowed: 'Nisam dobio dozvolu za mikrofon — proveri podešavanja browsera/telefona.',
-    voiceAudioCapture: 'Ne mogu da pristupim mikrofonu na ovom uređaju.',
-    voiceNetwork: 'Problem sa mrežom tokom prepoznavanja govora — probaj ponovo.',
-    voiceLangNotSupported: 'Srpski jezik nije podržan za prepoznavanje govora na ovom uređaju.',
-    voiceGenericError: (code) => `Nisam uspeo da prepoznam govor (${code}) — probaj ponovo ili ukucaj ručno.`,
+    voiceSent: '🎤 (glasovna poruka)',
+    voiceUnclear: 'Nisam razumeo šta si rekao/la — probaj ponovo, sporije i jasnije.',
     chatActionExpense: 'trošak',
     chatActionIncome: 'primanje',
     chatActionSaving: 'stavku štednje',
@@ -570,12 +567,9 @@ const TRANSLATIONS = {
     receiptError: 'Something went wrong with the image, try again.',
     imageLoadError: 'Failed to load the image.',
     analysisUnavailable: 'Analysis is currently unavailable.',
-    voiceNoMatch: "Didn't catch that — try again, slower and clearer.",
     voiceNotAllowed: 'Microphone permission denied — check your browser/phone settings.',
-    voiceAudioCapture: "Can't access the microphone on this device.",
-    voiceNetwork: 'Network problem during speech recognition — try again.',
-    voiceLangNotSupported: 'Speech recognition for this language is not supported on this device.',
-    voiceGenericError: (code) => `Couldn't recognize speech (${code}) — try again or type it manually.`,
+    voiceSent: '🎤 (voice message)',
+    voiceUnclear: "Didn't catch that — try again, slower and clearer.",
     chatActionExpense: 'expense',
     chatActionIncome: 'income',
     chatActionSaving: 'savings item',
@@ -889,54 +883,94 @@ function scrollChatToBottom() {
   });
 }
 
-const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
-const voiceSupported = !!SpeechRecognitionCtor;
+const voiceSupported = !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
 const isListening = ref(false);
-let recognition = null;
+let mediaRecorder = null;
+let mediaStream = null;
+let audioChunks = [];
 
-function toggleVoiceInput() {
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function toggleVoiceInput() {
   if (!voiceSupported) return;
 
   if (isListening.value) {
-    recognition?.stop();
+    mediaRecorder?.stop();
     return;
   }
 
-  recognition = new SpeechRecognitionCtor();
-  recognition.lang = lang.value === 'en' ? 'en-US' : 'sr-RS';
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
-
-  const VOICE_ERROR_MESSAGES = {
-    'not-allowed': t('voiceNotAllowed'),
-    'service-not-allowed': t('voiceNotAllowed'),
-    'audio-capture': t('voiceAudioCapture'),
-    'network': t('voiceNetwork'),
-    'language-not-supported': t('voiceLangNotSupported'),
-  };
-
-  recognition.onstart = () => { isListening.value = true; };
-  recognition.onend = () => { isListening.value = false; };
-  recognition.onnomatch = () => {
-    chatLog.push({ role: 'assistant', text: t('voiceNoMatch') });
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (e) {
+    chatLog.push({ role: 'assistant', text: t('voiceNotAllowed') });
     scrollChatToBottom();
+    return;
+  }
+
+  const preferredType = ['audio/webm', 'audio/ogg', 'audio/mp4'].find(m => MediaRecorder.isTypeSupported(m));
+  mediaRecorder = preferredType ? new MediaRecorder(mediaStream, { mimeType: preferredType }) : new MediaRecorder(mediaStream);
+  audioChunks = [];
+
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data.size > 0) audioChunks.push(event.data);
   };
-  recognition.onerror = (event) => {
+  mediaRecorder.onstart = () => { isListening.value = true; };
+  mediaRecorder.onstop = () => {
     isListening.value = false;
-    console.error('SpeechRecognition error:', event.error);
-    if (event.error === 'no-speech' || event.error === 'aborted') return;
-    chatLog.push({
-      role: 'assistant',
-      text: VOICE_ERROR_MESSAGES[event.error] || TRANSLATIONS[lang.value].voiceGenericError(event.error),
-    });
-    scrollChatToBottom();
-  };
-  recognition.onresult = (event) => {
-    chatInput.value = event.results[0][0].transcript;
-    sendChatMessage();
+    mediaStream?.getTracks().forEach(track => track.stop());
+    const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || preferredType || 'audio/webm' });
+    if (blob.size > 0) sendVoiceMessage(blob);
   };
 
-  recognition.start();
+  mediaRecorder.start();
+}
+
+async function sendVoiceMessage(blob) {
+  chatSending.value = true;
+  chatLog.push({ role: 'user', text: t('voiceSent') });
+  chatLog.push({ role: 'assistant', text: t('thinking') });
+  scrollChatToBottom();
+
+  try {
+    const base64 = await blobToBase64(blob);
+    const mimeType = (blob.type || 'audio/webm').split(';')[0];
+    const { data } = await axios.post('/api/budget/voice', {
+      audio: base64,
+      mime_type: mimeType,
+      expense_categories: EXPENSE_CATEGORIES,
+      savings_categories: SAVINGS_CATEGORIES,
+    });
+    chatLog.pop();
+
+    const validActions = ['add_expense', 'add_income', 'add_saving'];
+    if (validActions.includes(data.action) && data.name && data.amount > 0) {
+      const currency = data.currency || 'RSD';
+      const freq = data.freq ?? 1;
+      const category = data.category || 'Ostalo';
+      const freqText = data.action === 'add_saving' ? '' : `, ${FREQ_LABELS.value[freq] ?? t('monthly')}`;
+      const catText = data.action === 'add_income' ? '' : `, ${t('categoryWord')} ${categoryLabel(category)}`;
+      chatLog.push({
+        role: 'assistant',
+        text: `${t('confirmAddPrefix')} ${CHAT_ACTION_LABELS.value[data.action]} "${data.name}": ${data.amount} ${currency}${freqText}${catText}?`,
+        confirm: { action: data.action, name: data.name, amount: data.amount, currency, freq, category },
+      });
+    } else {
+      chatLog.push({ role: 'assistant', text: t('voiceUnclear') });
+    }
+  } catch (e) {
+    chatLog.pop();
+    chatLog.push({ role: 'assistant', text: t('chatError') });
+  } finally {
+    chatSending.value = false;
+    scrollChatToBottom();
+  }
 }
 
 async function sendChatMessage() {

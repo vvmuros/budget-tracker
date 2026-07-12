@@ -236,6 +236,109 @@ class BudgetController extends Controller
         return response()->json($parsed);
     }
 
+    public function voice(Request $request, GeminiClient $gemini)
+    {
+        $data = $request->validate([
+            'audio' => ['required', 'string', 'max:8000000'],
+            'mime_type' => ['required', 'string', 'in:audio/webm,audio/ogg,audio/mp4,audio/wav,audio/mpeg,audio/aac'],
+            'expense_categories' => ['required', 'array'],
+            'expense_categories.*' => ['string'],
+            'savings_categories' => ['required', 'array'],
+            'savings_categories.*' => ['string'],
+        ]);
+
+        $categories = array_values(array_unique(array_merge($data['expense_categories'], $data['savings_categories'])));
+        $categoryList = implode(', ', $categories);
+        $lang = $request->cookie('lang', 'sr');
+
+        $schema = [
+            'type' => 'OBJECT',
+            'properties' => [
+                'action' => [
+                    'type' => 'STRING',
+                    'enum' => ['add_expense', 'add_income', 'add_saving', 'unclear'],
+                ],
+                'name' => ['type' => 'STRING'],
+                'amount' => ['type' => 'NUMBER'],
+                'currency' => ['type' => 'STRING', 'enum' => ['RSD', 'EUR', 'USD']],
+                'freq' => ['type' => 'INTEGER'],
+                'category' => ['type' => 'STRING', 'enum' => $categories],
+            ],
+            'required' => ['action', 'name', 'amount', 'currency', 'freq', 'category'],
+        ];
+
+        if ($lang === 'en') {
+            $prompt = <<<PROMPT
+            This is an audio recording of the user speaking in English about their
+            finances. Listen to it and transcribe it mentally, then determine
+            whether they want to:
+            - add an expense (add_expense)
+            - add income (add_income)
+            - add a savings/asset item (add_saving)
+            - or the recording is unclear/unrelated (unclear)
+
+            If clear, extract the item name (name), amount (amount, number only),
+            currency (currency: RSD/EUR/USD, default RSD if not stated), and for
+            expense/income the frequency (freq: 1=monthly, 2=every 2 months,
+            3=every 3 months, 0=one-time).
+
+            Important for freq: a spontaneous mention of a single purchase (coffee,
+            taxi, fuel, food, a gift, etc.) is a ONE-TIME expense (freq=0) — that is
+            the default. Only use monthly/every-2-months/every-3-months if they
+            explicitly say it repeats ("monthly", "every month", "subscription",
+            "membership", "installment", "rent") or clearly describe a recurring
+            obligation. Don't assume something is monthly just because frequency
+            wasn't stated. Savings items don't need freq.
+
+            If add_expense or add_saving, pick the best matching category
+            (category) from this list based on the item name: {$categoryList}. If
+            none clearly match, use "Ostalo". For add_income or unclear, set
+            category to "Ostalo".
+            PROMPT;
+        } else {
+            $prompt = <<<PROMPT
+            Ovo je audio snimak na kome korisnik govori na srpskom o svojim
+            finansijama. Preslušaj ga, pa prepoznaj da li korisnik želi da:
+            - doda trošak (add_expense)
+            - doda primanje/prihod (add_income)
+            - doda stavku štednje/imovine (add_saving)
+            - ili snimak nije jasan/nije o finansijama (unclear)
+
+            Ako je jasno, izvuci naziv stavke (name), iznos (amount, samo broj), valutu
+            (currency: RSD/EUR/USD, podrazumevano RSD ako nije rečeno), i za trošak/primanje
+            učestalost (freq: 1=mesečno, 2=na 2 meseca, 3=na 3 meseca, 0=jednokratno).
+
+            Važno za freq: spontan pomen pojedinačne kupovine (kafa, taxi, gorivo, hrana,
+            poklon i slično) je JEDNOKRATAN trošak (freq=0) — to je podrazumevana vrednost.
+            Koristi mesečno/na 2 meseca/na 3 meseca SAMO ako korisnik eksplicitno kaže da se
+            ponavlja ("mesečno", "svaki mesec", "na dva meseca", "pretplata", "članarina",
+            "rata", "kirija", "stanarina") ili opisuje očigledno ponavljajuću obavezu. Ne
+            pretpostavljaj automatski da je nešto mesečno samo zato što učestalost nije
+            eksplicitno navedena. Za štednju freq nije potreban.
+
+            Ako je add_expense ili add_saving, izaberi najprikladniju kategoriju (category)
+            iz ove liste na osnovu naziva stavke: {$categoryList}. Ako nijedna jasno ne
+            odgovara, koristi "Ostalo". Za add_income ili unclear, postavi category na
+            "Ostalo".
+            PROMPT;
+        }
+
+        try {
+            $raw = $gemini->generate($prompt, $schema, [
+                ['mime_type' => $data['mime_type'], 'data' => $data['audio']],
+            ]);
+            $parsed = json_decode($raw, true);
+        } catch (\Throwable) {
+            return response()->json(['action' => 'unclear']);
+        }
+
+        if (! $parsed || ! isset($parsed['action'])) {
+            return response()->json(['action' => 'unclear']);
+        }
+
+        return response()->json($parsed);
+    }
+
     public function receipt(Request $request, GeminiClient $gemini)
     {
         $data = $request->validate([
