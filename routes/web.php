@@ -36,7 +36,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
+// 'verified' dropped for now — Resend has no verified domain yet, so
+// verification emails can't reach anyone but the account owner. Add
+// 'verified' back to this group once a domain is set up on Resend.
+Route::middleware(['auth'])->group(function () {
     Route::get('/', [BudgetController::class, 'index'])->name('budget.index');
     Route::get('/api/budget', [BudgetController::class, 'fetch'])->name('budget.fetch');
     Route::get('/api/budget/yearly', [BudgetController::class, 'yearly'])->name('budget.yearly');
