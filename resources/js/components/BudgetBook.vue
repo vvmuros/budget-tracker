@@ -49,7 +49,7 @@
               <svg v-if="!isListening" viewBox="0 0 16 16" class="icon"><path d="M8 2.5 a2 2 0 0 1 2 2 v3.5 a2 2 0 0 1 -4 0 v-3.5 a2 2 0 0 1 2 -2 Z" /><path d="M4.5 8 a3.5 3.5 0 0 0 7 0 M8 11.5 V13.5 M6 13.5 H10" /></svg>
               <svg v-else viewBox="0 0 16 16" class="icon"><rect x="4" y="4" width="8" height="8" rx="1" /></svg>
             </button>
-            <button type="button" class="mic-btn" :disabled="chatSending || scanningReceipt" @click="triggerReceiptPicker" :aria-label="t('receiptLabel')">
+            <button type="button" class="mic-btn" :disabled="chatSending || scanningReceipt || isListening" @click="triggerReceiptPicker" :aria-label="t('receiptLabel')">
               <svg viewBox="0 0 16 16" class="icon"><path d="M2 6 a1 1 0 0 1 1 -1 h1.5 l1 -1.5 h5 l1 1.5 H13 a1 1 0 0 1 1 1 v6 a1 1 0 0 1 -1 1 H3 a1 1 0 0 1 -1 -1 Z" /><circle cx="8" cy="9" r="2.3" /></svg>
             </button>
             <input ref="receiptInputEl" type="file" accept="image/*" capture="environment" class="receipt-input" @change="onReceiptSelected">
@@ -388,7 +388,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed, watch, onMounted, nextTick } from 'vue';
+import { reactive, ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import axios from 'axios';
 
 const yearNow = new Date().getFullYear();
@@ -885,9 +885,11 @@ function scrollChatToBottom() {
 
 const voiceSupported = !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
 const isListening = ref(false);
+const MAX_RECORDING_MS = 30000;
 let mediaRecorder = null;
 let mediaStream = null;
 let audioChunks = [];
+let recordingTimeout = null;
 
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
@@ -921,8 +923,12 @@ async function toggleVoiceInput() {
   mediaRecorder.ondataavailable = (event) => {
     if (event.data.size > 0) audioChunks.push(event.data);
   };
-  mediaRecorder.onstart = () => { isListening.value = true; };
+  mediaRecorder.onstart = () => {
+    isListening.value = true;
+    recordingTimeout = setTimeout(() => mediaRecorder?.stop(), MAX_RECORDING_MS);
+  };
   mediaRecorder.onstop = () => {
+    clearTimeout(recordingTimeout);
     isListening.value = false;
     mediaStream?.getTracks().forEach(track => track.stop());
     const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || preferredType || 'audio/webm' });
@@ -931,6 +937,12 @@ async function toggleVoiceInput() {
 
   mediaRecorder.start();
 }
+
+onUnmounted(() => {
+  clearTimeout(recordingTimeout);
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  mediaStream?.getTracks().forEach(track => track.stop());
+});
 
 async function sendVoiceMessage(blob) {
   chatSending.value = true;
