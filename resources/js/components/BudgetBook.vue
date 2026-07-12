@@ -28,8 +28,12 @@
             </div>
           </div>
           <form class="chat-input" @submit.prevent="sendChatMessage">
-            <input type="text" v-model="chatInput" placeholder="npr. potrošio sam 500 na kafu" :disabled="chatSending">
-            <button type="submit" :disabled="chatSending || !chatInput.trim()">Pošalji</button>
+            <input type="text" v-model="chatInput" placeholder="npr. potrošio sam 500 na kafu" :disabled="chatSending || isListening">
+            <button
+              v-if="voiceSupported" type="button" class="mic-btn" :class="{ listening: isListening }"
+              :disabled="chatSending" @click="toggleVoiceInput" aria-label="Govorom unesi trošak"
+            >{{ isListening ? '⏹' : '🎤' }}</button>
+            <button type="submit" :disabled="chatSending || isListening || !chatInput.trim()">Pošalji</button>
           </form>
         </div>
 
@@ -119,7 +123,7 @@
               </thead>
               <TransitionGroup tag="tbody" name="row">
                 <tr v-for="item in visibleIncome" :key="keyFor(item)" :class="{ inactive: !item.active }">
-                  <td class="cell-name"><input type="text" v-model="item.name" @change="saveIncome"></td>
+                  <td class="cell-name"><input type="text" v-model="item.name" :title="item.name" @change="saveIncome"></td>
                   <td class="amt-col" data-label="Iznos"><input type="number" v-model.number="item.amount" step="1" @change="saveIncome"></td>
                   <td class="cur-col" data-label="Valuta">
                     <select v-model="item.currency" @change="saveIncome">
@@ -162,7 +166,10 @@
               </thead>
               <TransitionGroup tag="tbody" name="row">
                 <tr v-for="item in visibleExpenses" :key="keyFor(item)" :class="{ inactive: !isExpenseActive(item) }">
-                  <td class="cell-name"><input type="text" v-model="item.name" @change="saveExpenses"></td>
+                  <td class="cell-name">
+                    <span class="cat-dot" :style="{ background: categoryColor(item.category, EXPENSE_CATEGORIES) }"></span>
+                    <input type="text" v-model="item.name" :title="item.name" @change="saveExpenses">
+                  </td>
                   <td class="amt-col" data-label="Iznos"><input type="number" v-model.number="item.amount" step="1" @change="saveExpenses"></td>
                   <td class="cur-col" data-label="Valuta">
                     <select v-model="item.currency" @change="saveExpenses">
@@ -218,7 +225,10 @@
               </thead>
               <TransitionGroup tag="tbody" name="row">
                 <tr v-for="item in savings" :key="keyFor(item)">
-                  <td class="cell-name"><input type="text" v-model="item.name" @change="saveSavings"></td>
+                  <td class="cell-name">
+                    <span class="cat-dot" :style="{ background: categoryColor(item.category, SAVINGS_CATEGORIES) }"></span>
+                    <input type="text" v-model="item.name" :title="item.name" @change="saveSavings">
+                  </td>
                   <td class="amt-col" data-label="Iznos"><input type="number" v-model.number="item.amount" step="1" @change="saveSavings"></td>
                   <td class="cur-col" data-label="Valuta">
                     <select v-model="item.currency" @change="saveSavings">
@@ -359,6 +369,11 @@ const defaultRates = { usd: 102.76, eur: 117.36 };
 const EXPENSE_CATEGORIES = ['Stanovanje', 'Hrana', 'Prevoz', 'Zdravlje', 'Zabava', 'Računi', 'Otplate', 'Ostalo'];
 const SAVINGS_CATEGORIES = ['Gotovina', 'Štednja', 'Investicije', 'Nekretnine', 'Ostalo'];
 const CATEGORY_COLORS = ['#96690A', '#9C3232', '#1F7A4D', '#B85C1F', '#2D5F9E', '#0D8F82', '#7A3F99', '#914A1E'];
+
+function categoryColor(category, list) {
+  const idx = list.indexOf(category);
+  return CATEGORY_COLORS[idx] ?? CATEGORY_COLORS[CATEGORY_COLORS.length - 1];
+}
 
 const expenses = reactive(clone(defaultExpenses));
 const income = reactive(clone(defaultIncome));
@@ -515,7 +530,7 @@ const categoryBreakdown = computed(() => {
       category,
       amount,
       pct: (amount / total) * 100,
-      color: CATEGORY_COLORS[EXPENSE_CATEGORIES.indexOf(category)] ?? CATEGORY_COLORS[CATEGORY_COLORS.length - 1],
+      color: categoryColor(category, EXPENSE_CATEGORIES),
     }))
     .sort((a, b) => b.amount - a.amount);
 });
@@ -552,6 +567,56 @@ function scrollChatToBottom() {
   nextTick(() => {
     if (chatLogEl.value) chatLogEl.value.scrollTop = chatLogEl.value.scrollHeight;
   });
+}
+
+const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+const voiceSupported = !!SpeechRecognitionCtor;
+const isListening = ref(false);
+let recognition = null;
+
+function toggleVoiceInput() {
+  if (!voiceSupported) return;
+
+  if (isListening.value) {
+    recognition?.stop();
+    return;
+  }
+
+  recognition = new SpeechRecognitionCtor();
+  recognition.lang = 'sr-RS';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  const VOICE_ERROR_MESSAGES = {
+    'not-allowed': 'Nisam dobio dozvolu za mikrofon — proveri podešavanja browsera/telefona.',
+    'service-not-allowed': 'Nisam dobio dozvolu za mikrofon — proveri podešavanja browsera/telefona.',
+    'audio-capture': 'Ne mogu da pristupim mikrofonu na ovom uređaju.',
+    'network': 'Problem sa mrežom tokom prepoznavanja govora — probaj ponovo.',
+    'language-not-supported': 'Srpski jezik nije podržan za prepoznavanje govora na ovom uređaju.',
+  };
+
+  recognition.onstart = () => { isListening.value = true; };
+  recognition.onend = () => { isListening.value = false; };
+  recognition.onnomatch = () => {
+    chatLog.push({ role: 'assistant', text: 'Nisam razumeo šta si rekao/la — probaj ponovo, sporije i jasnije.' });
+    scrollChatToBottom();
+  };
+  recognition.onerror = (event) => {
+    isListening.value = false;
+    console.error('SpeechRecognition greška:', event.error);
+    if (event.error === 'no-speech' || event.error === 'aborted') return;
+    chatLog.push({
+      role: 'assistant',
+      text: VOICE_ERROR_MESSAGES[event.error] || `Nisam uspeo da prepoznam govor (${event.error}) — probaj ponovo ili ukucaj ručno.`,
+    });
+    scrollChatToBottom();
+  };
+  recognition.onresult = (event) => {
+    chatInput.value = event.results[0][0].transcript;
+    sendChatMessage();
+  };
+
+  recognition.start();
 }
 
 async function sendChatMessage() {
@@ -834,6 +899,8 @@ const yearChart = computed(() => {
   width:100%; padding:3px 2px;
 }
 .page input[type=text]:focus, .page input[type=number]:focus{ outline:none; border-bottom:1px solid var(--gilt); }
+.page td.cell-name input{ display:block; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; }
+.cat-dot{ display:none; width:8px; height:8px; border-radius:50%; flex-shrink:0; }
 .page select{
   font-family:Georgia,serif; font-size:12.5px; color:var(--ink);
   background:transparent; border:none; border-bottom:1px solid transparent; padding:3px 0;
@@ -981,6 +1048,12 @@ const yearChart = computed(() => {
 }
 .chat-input button:hover:not(:disabled){ background:rgba(184,137,43,0.12); }
 .chat-input button:disabled{ opacity:0.5; cursor:default; }
+.mic-btn{ padding:6px 10px; font-size:14px; }
+.mic-btn.listening{ background:rgba(122,31,31,0.15); border-color:var(--seal); animation:micPulse 1.2s ease-in-out infinite; }
+@keyframes micPulse{
+  0%, 100%{ box-shadow:0 0 0 0 rgba(122,31,31,0.35); }
+  50%{ box-shadow:0 0 0 6px rgba(122,31,31,0); }
+}
 
 .analyze-row{ text-align:center; margin:16px 0; }
 
@@ -1048,8 +1121,14 @@ const yearChart = computed(() => {
   .page td[data-label] input, .page td[data-label] select{ text-align:right; }
   .page td[data-label]:last-of-type{ border-bottom:none; }
 
-  .page td.cell-name{ font-size:15px; }
-  .page td.cell-name input{ font-size:15px; font-weight:600; }
+  .page td.cell-name{ display:flex; align-items:center; gap:6px; font-size:15px; border-bottom:1px dotted rgba(59,42,24,0.3); }
+  .page td.cell-name input{ font-size:15px; font-weight:600; text-overflow:ellipsis; }
+  .cat-dot{ display:inline-block; }
+
+  .page td.amt-col{ display:inline-flex; width:58%; border-bottom:none; }
+  .page td.cur-col{ display:inline-flex; width:40%; }
+  .page td.cur-col[data-label]::before{ display:none; }
+  .page td.cur-col select{ text-align:left; }
 
   .page td.del-col{
     position:absolute; top:10px; right:8px;
