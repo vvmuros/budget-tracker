@@ -12,6 +12,7 @@ $t = [
     'forgot_password' => ['sr' => 'Zaboravio si šifru?', 'en' => 'Forgot your password?'],
     'no_account' => ['sr' => 'Nemaš nalog?', 'en' => "Don't have an account?"],
     'register_link' => ['sr' => 'Registruj se', 'en' => 'Register'],
+    'privacy_link' => ['sr' => 'Politika privatnosti', 'en' => 'Privacy policy'],
 ];
 ?>
 <!DOCTYPE html>
@@ -120,6 +121,7 @@ $t = [
       <button type="submit">{{ $t['submit'][$lang] }}</button>
     </form>
     <div class="foot">{{ $t['no_account'][$lang] }} <a href="{{ route('register') }}">{{ $t['register_link'][$lang] }}</a></div>
+    <div class="foot" style="margin-top:8px; font-size:11px;"><a href="{{ route('privacy') }}">{{ $t['privacy_link'][$lang] }}</a></div>
   </div>
   <script>
     if ('serviceWorker' in navigator) {

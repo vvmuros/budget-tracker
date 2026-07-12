@@ -2,17 +2,19 @@
 $lang = request()->cookie('lang', 'sr');
 $t = [
     'html_lang' => ['sr' => 'sr', 'en' => 'en'],
-    'title' => ['sr' => 'Registracija — Knjižica troškova', 'en' => 'Register — Budget Book'],
+    'title' => ['sr' => 'Potvrdi email — Knjižica troškova', 'en' => 'Verify email — Budget Book'],
     'heading' => ['sr' => 'Knjižica troškova', 'en' => 'Budget Book'],
-    'sub' => ['sr' => 'otvori novu ličnu evidenciju', 'en' => 'open a new personal ledger'],
-    'name' => ['sr' => 'Ime', 'en' => 'Name'],
-    'email' => ['sr' => 'Email', 'en' => 'Email'],
-    'password' => ['sr' => 'Lozinka', 'en' => 'Password'],
-    'password_confirm' => ['sr' => 'Ponovi lozinku', 'en' => 'Confirm password'],
-    'submit' => ['sr' => 'Registruj se', 'en' => 'Register'],
-    'has_account' => ['sr' => 'Već imaš nalog?', 'en' => 'Already have an account?'],
-    'login_link' => ['sr' => 'Prijavi se', 'en' => 'Log in'],
-    'privacy_link' => ['sr' => 'Politika privatnosti', 'en' => 'Privacy policy'],
+    'sub' => ['sr' => 'potvrdi svoj email', 'en' => 'verify your email'],
+    'body' => [
+        'sr' => 'Poslali smo link za potvrdu na',
+        'en' => "We've sent a verification link to",
+    ],
+    'body2' => [
+        'sr' => 'Klikni na link u mejlu da otključaš svoju knjižicu.',
+        'en' => 'Click the link in the email to unlock your ledger.',
+    ],
+    'resend' => ['sr' => 'Pošalji ponovo', 'en' => 'Resend email'],
+    'logout' => ['sr' => 'Odjavi se', 'en' => 'Log out'],
 ];
 ?>
 <!DOCTYPE html>
@@ -59,28 +61,25 @@ $t = [
   .box{
     width:100%; max-width:380px; background:var(--parchment); border-radius:6px;
     padding:34px 30px; box-shadow:0 30px 60px -20px rgba(0,0,0,0.7), inset 0 0 0 2px rgba(184,137,43,0.35);
-    position:relative;
+    position:relative; text-align:center;
   }
   .lang-switch{ position:absolute; top:12px; right:14px; font-size:11px; }
   .lang-switch a{ color:var(--ink-light); text-decoration:underline; }
   h1{ text-align:center; font-family:'Cinzel',Georgia,serif; font-size:22px; margin:0 0 4px 0; }
   .sub{ text-align:center; font-size:12px; font-style:italic; color:var(--ink-light); margin-bottom:22px; }
-  label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--ink-light); margin-bottom:4px; font-variant:small-caps; }
-  input{
-    width:100%; font-family:Georgia,serif; font-size:14px; color:var(--ink);
-    background:transparent; border:none; border-bottom:1px solid var(--ink-light);
-    padding:6px 2px; margin-bottom:16px;
-  }
-  input:focus{ outline:none; border-bottom:1px solid var(--gilt); }
+  .body-text{ font-size:14px; line-height:1.6; margin-bottom:6px; }
+  .body-text strong{ color:var(--gilt); }
+  .body-text2{ font-size:12.5px; color:var(--ink-light); margin-bottom:22px; }
   button{
     width:100%; background:none; border:1px solid var(--gilt); color:var(--ink);
     font-family:Georgia,serif; font-variant:small-caps; font-size:13px; padding:10px 14px;
     cursor:pointer; letter-spacing:0.5px; margin-top:6px;
   }
   button:hover{ background:rgba(184,137,43,0.12); }
-  .err{ color:var(--seal); font-size:12.5px; margin-bottom:14px; }
+  .status{ color:var(--pos, #2E5B3E); font-size:12.5px; margin-bottom:14px; }
   .foot{ text-align:center; margin-top:18px; font-size:12px; }
-  .foot a{ color:var(--ink); }
+  .foot button{ border:none; text-decoration:underline; color:var(--ink-light); width:auto; padding:0; }
+  .foot button:hover{ background:none; color:var(--ink); }
 </style>
 </head>
 <body>
@@ -91,24 +90,23 @@ $t = [
     <h1>{{ $t['heading'][$lang] }}</h1>
     <div class="sub">{{ $t['sub'][$lang] }}</div>
 
-    @if ($errors->any())
-      <div class="err">{{ $errors->first() }}</div>
+    @if (session('status'))
+      <div class="status">{{ session('status') }}</div>
     @endif
 
-    <form method="POST" action="{{ route('register') }}">
+    <div class="body-text">{{ $t['body'][$lang] }} <strong>{{ auth()->user()->email }}</strong>.</div>
+    <div class="body-text2">{{ $t['body2'][$lang] }}</div>
+
+    <form method="POST" action="{{ route('verification.send') }}">
       @csrf
-      <label>{{ $t['name'][$lang] }}</label>
-      <input type="text" name="name" value="{{ old('name') }}" required autofocus>
-      <label>{{ $t['email'][$lang] }}</label>
-      <input type="email" name="email" value="{{ old('email') }}" required>
-      <label>{{ $t['password'][$lang] }}</label>
-      <input type="password" name="password" required>
-      <label>{{ $t['password_confirm'][$lang] }}</label>
-      <input type="password" name="password_confirmation" required>
-      <button type="submit">{{ $t['submit'][$lang] }}</button>
+      <button type="submit">{{ $t['resend'][$lang] }}</button>
     </form>
-    <div class="foot">{{ $t['has_account'][$lang] }} <a href="{{ route('login') }}">{{ $t['login_link'][$lang] }}</a></div>
-    <div class="foot" style="margin-top:8px; font-size:11px;"><a href="{{ route('privacy') }}">{{ $t['privacy_link'][$lang] }}</a></div>
+    <div class="foot">
+      <form method="POST" action="{{ route('logout') }}">
+        @csrf
+        <button type="submit">{{ $t['logout'][$lang] }}</button>
+      </form>
+    </div>
   </div>
   <script>
     if ('serviceWorker' in navigator) {

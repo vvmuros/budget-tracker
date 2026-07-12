@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use Illuminate\Auth\Events\Registered;
+use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -24,16 +26,18 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'min:2', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:6', 'confirmed'],
         ]);
 
         $user = User::create([
-            'name' => $data['name'],
+            'name' => trim($data['name']),
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
         ]);
+
+        event(new Registered($user));
 
         Auth::login($user);
         $request->session()->regenerate();
@@ -118,6 +122,33 @@ class AuthController extends Controller
         }
 
         return back()->withErrors(['email' => $this->passwordStatusMessage($status, $lang)]);
+    }
+
+    public function showVerifyNotice()
+    {
+        return view('auth.verify-email');
+    }
+
+    public function verifyEmail(EmailVerificationRequest $request)
+    {
+        $request->fulfill();
+
+        return redirect()->route('budget.index')->with('verified', true);
+    }
+
+    public function resendVerification(Request $request)
+    {
+        $lang = $request->cookie('lang', 'sr');
+
+        if ($request->user()->hasVerifiedEmail()) {
+            return redirect()->route('budget.index');
+        }
+
+        $request->user()->sendEmailVerificationNotification();
+
+        return back()->with('status', $lang === 'en'
+            ? 'A new verification link has been sent to your email.'
+            : 'Poslali smo ti novi link za potvrdu na email.');
     }
 
     private function passwordStatusMessage(string $status, string $lang): string
