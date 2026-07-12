@@ -98,6 +98,7 @@ class BudgetController extends Controller
                 'period' => $cursor,
                 'income' => $this->sumActiveItems($income['value'] ?? '[]', $ratesArr),
                 'expense' => $this->sumActiveItems($expense['value'] ?? '[]', $ratesArr),
+                'categories' => $this->sumByCategory($expense['value'] ?? '[]', $ratesArr),
             ];
 
             $cursor = $this->incrementPeriod($cursor);
@@ -376,6 +377,22 @@ class BudgetController extends Controller
         return collect($items)
             ->filter(fn ($it) => $it['active'] ?? false)
             ->sum(fn ($it) => $this->toRsd($it['amount'] ?? 0, $it['currency'] ?? 'RSD', $rates));
+    }
+
+    private function sumByCategory(string $json, array $rates): array
+    {
+        $items = json_decode($json, true) ?: [];
+
+        $totals = [];
+        foreach ($items as $it) {
+            if (! ($it['active'] ?? false)) {
+                continue;
+            }
+            $cat = $it['category'] ?? 'Ostalo';
+            $totals[$cat] = ($totals[$cat] ?? 0) + $this->toRsd($it['amount'] ?? 0, $it['currency'] ?? 'RSD', $rates);
+        }
+
+        return $totals;
     }
 
     private function toRsd(float $amount, string $currency, array $rates): float

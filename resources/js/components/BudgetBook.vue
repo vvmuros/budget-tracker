@@ -74,33 +74,65 @@
 
           <template v-else-if="yearMonths.length">
             <div class="year-legend">
-              <span class="legend-item"><span class="swatch" :style="{ background: YEAR_COLORS.income }"></span>{{ t('income') }}</span>
-              <span class="legend-item"><span class="swatch" :style="{ background: YEAR_COLORS.expense }"></span>{{ t('expenses') }}</span>
+              <span class="legend-item"><span class="swatch line-swatch" :style="{ background: YEAR_COLORS.income }"></span>{{ t('income') }}</span>
+              <span class="legend-item" v-for="cat in yearChart.categoriesUsed" :key="cat">
+                <span class="swatch" :style="{ background: categoryColor(cat, EXPENSE_CATEGORIES) }"></span>{{ categoryLabel(cat) }}
+              </span>
             </div>
 
-            <svg class="year-chart" :viewBox="`0 0 ${yearChart.width} ${yearChart.height}`" preserveAspectRatio="xMidYMid meet">
-              <line
-                v-for="(gl, idx) in yearChart.gridlines" :key="idx"
-                :x1="yearChart.padding" :x2="yearChart.width - yearChart.padding"
-                :y1="gl" :y2="gl" class="year-gridline"
-              />
-              <polyline :points="yearChart.expensePoints" fill="none" :stroke="YEAR_COLORS.expense" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
-              <polyline :points="yearChart.incomePoints" fill="none" :stroke="YEAR_COLORS.income" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
-              <circle
-                v-for="(m, i) in yearMonths" :key="'inc'+i"
-                :cx="yearChart.x(i)" :cy="yearChart.y(m.income)" r="4"
-                :fill="YEAR_COLORS.income" stroke="var(--parchment)" stroke-width="2"
-              ><title>{{ periodLabel(m.period) }} — {{ t('income') }}: {{ fmt(m.income) }} RSD</title></circle>
-              <circle
-                v-for="(m, i) in yearMonths" :key="'exp'+i"
-                :cx="yearChart.x(i)" :cy="yearChart.y(m.expense)" r="4"
-                :fill="YEAR_COLORS.expense" stroke="var(--parchment)" stroke-width="2"
-              ><title>{{ periodLabel(m.period) }} — {{ t('expenses') }}: {{ fmt(m.expense) }} RSD</title></circle>
-              <text
-                v-for="(m, i) in yearMonths" :key="'lbl'+i"
-                :x="yearChart.x(i)" :y="yearChart.height - 8" class="year-axis-label" text-anchor="middle"
-              >{{ monthAbbrev(m.period) }}</text>
-            </svg>
+            <div class="year-chart-wrap">
+              <svg class="year-chart" :viewBox="`0 0 ${yearChart.width} ${yearChart.height}`" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                  <linearGradient id="year-grad-income" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" :stop-color="YEAR_COLORS.income" stop-opacity="0.35" />
+                    <stop offset="100%" :stop-color="YEAR_COLORS.income" stop-opacity="0" />
+                  </linearGradient>
+                </defs>
+                <line
+                  v-for="(gl, idx) in yearChart.gridlines" :key="'gl'+idx"
+                  :x1="yearChart.padding" :x2="yearChart.width - yearChart.padding"
+                  :y1="gl" :y2="gl" class="year-gridline"
+                />
+                <line
+                  v-if="hoveredIndex !== null"
+                  :x1="yearChart.x(hoveredIndex)" :x2="yearChart.x(hoveredIndex)"
+                  :y1="yearChart.padding" :y2="yearChart.height - yearChart.padding"
+                  class="year-hover-line"
+                />
+                <rect
+                  v-for="seg in yearChart.segments" :key="seg.key"
+                  :x="seg.x" :y="seg.y" :width="seg.width" :height="seg.height"
+                  :fill="seg.color" class="year-bar-seg"
+                />
+                <path :d="yearChart.incomeArea" fill="url(#year-grad-income)" stroke="none" />
+                <path :d="yearChart.incomePath" fill="none" :stroke="YEAR_COLORS.income" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+                <circle
+                  v-for="(m, i) in yearChart.months" v-show="m.hasData" :key="'inc'+i"
+                  :cx="yearChart.x(i)" :cy="yearChart.y(m.income)" r="4"
+                  :fill="YEAR_COLORS.income" stroke="var(--parchment)" stroke-width="2"
+                />
+                <text
+                  v-for="(m, i) in yearChart.months" :key="'lbl'+i"
+                  :x="yearChart.x(i)" :y="yearChart.height - 8" class="year-axis-label"
+                  :class="{ 'is-future': !m.hasData }" text-anchor="middle"
+                >{{ monthAbbrev(m.period) }}</text>
+                <rect
+                  v-for="(m, i) in yearChart.months" v-show="m.hasData" :key="'hit'+i"
+                  :x="yearChart.x(i) - yearChart.colWidth / 2" y="0" :width="yearChart.colWidth" :height="yearChart.height"
+                  fill="transparent" class="year-hit"
+                  @pointerenter="hoveredIndex = i" @pointerleave="hoveredIndex = null"
+                  @click="hoveredIndex = hoveredIndex === i ? null : i"
+                />
+              </svg>
+              <div v-if="hoveredIndex !== null" class="year-tooltip" :style="yearTooltipStyle">
+                <strong>{{ periodLabel(yearChart.months[hoveredIndex].period) }}</strong>
+                <div class="year-tooltip-row"><span class="swatch line-swatch" :style="{ background: YEAR_COLORS.income }"></span>{{ t('income') }}: {{ fmt(yearChart.months[hoveredIndex].income) }} RSD</div>
+                <div class="year-tooltip-row" v-for="slice in yearChart.tooltipCategories(hoveredIndex)" :key="slice.category">
+                  <span class="swatch" :style="{ background: slice.color }"></span>{{ categoryLabel(slice.category) }}: {{ fmt(slice.amount) }} RSD
+                </div>
+                <div class="year-tooltip-row net" :class="yearChart.months[hoveredIndex].net >= 0 ? 'pos' : 'neg'">{{ t('net') }}: {{ signed(yearChart.months[hoveredIndex].net) }} RSD</div>
+              </div>
+            </div>
 
             <table class="year-table">
               <thead><tr><th>{{ t('month') }}</th><th>{{ t('income') }}</th><th>{{ t('expenses') }}</th><th>{{ t('net') }}</th></tr></thead>
@@ -1089,10 +1121,11 @@ const showYearView = ref(false);
 const yearMonths = ref([]);
 const yearLoading = ref(false);
 const currentYearLabel = computed(() => currentPeriod.value.split('-')[0]);
-const YEAR_COLORS = { income: CATEGORY_COLORS[2], expense: CATEGORY_COLORS[1] };
+const YEAR_COLORS = { income: CATEGORY_COLORS[2] };
 
 async function toggleYearView() {
   showYearView.value = !showYearView.value;
+  hoveredIndex.value = null;
   if (showYearView.value && yearMonths.value.length === 0 && !yearLoading.value) {
     yearLoading.value = true;
     try {
@@ -1124,24 +1157,105 @@ function openMonthPicker(event) {
   }
 }
 
+function smoothPath(points) {
+  if (!points.length) return '';
+  if (points.length === 1) return `M ${points[0][0].toFixed(1)},${points[0][1].toFixed(1)}`;
+  let d = `M ${points[0][0].toFixed(1)},${points[0][1].toFixed(1)}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i - 1] || points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6;
+    const c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6;
+    const c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += ` C ${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+
+const hoveredIndex = ref(null);
+
 const yearChart = computed(() => {
   const width = 640, height = 220, padding = 32;
-  const months = yearMonths.value;
+  const dataMonths = yearMonths.value;
+  const gridlines = [0, 0.25, 0.5, 0.75, 1].map(pct => height - padding - pct * (height - padding * 2));
 
-  if (!months.length) {
-    return { width, height, padding, x: () => 0, y: () => 0, incomePoints: '', expensePoints: '', gridlines: [] };
+  if (!dataMonths.length) {
+    return {
+      width, height, padding, colWidth: 0, months: [], segments: [], categoriesUsed: [],
+      x: () => 0, y: () => 0, incomePath: '', incomeArea: '', gridlines,
+      tooltipCategories: () => [],
+    };
   }
 
-  const maxVal = Math.max(1, ...months.flatMap(m => [m.income, m.expense]));
-  const stepX = months.length > 1 ? (width - padding * 2) / (months.length - 1) : 0;
+  const year = dataMonths[0].period.split('-')[0];
+  const byPeriod = new Map(dataMonths.map(m => [m.period, m]));
+  const months = Array.from({ length: 12 }, (_, idx) => {
+    const period = `${year}-${String(idx + 1).padStart(2, '0')}`;
+    const m = byPeriod.get(period);
+    return m
+      ? { period, income: m.income, expense: m.expense, net: m.net, categories: m.categories || {}, hasData: true }
+      : { period, income: 0, expense: 0, net: 0, categories: {}, hasData: false };
+  });
+
+  const categoriesUsed = EXPENSE_CATEGORIES.filter(cat => months.some(m => (m.categories[cat] || 0) > 0));
+
+  const maxVal = Math.max(1, ...dataMonths.map(m => Math.max(m.income, m.expense)));
+  const stepX = (width - padding * 2) / 11;
   const x = (i) => padding + i * stepX;
   const y = (v) => height - padding - (v / maxVal) * (height - padding * 2);
+  const baseline = height - padding;
+  const barWidth = stepX * 0.56;
+
+  const activeIdx = months.map((m, i) => (m.hasData ? i : null)).filter(i => i !== null);
+  const incomePoints = activeIdx.map(i => [x(i), y(months[i].income)]);
+
+  const areaClose = (points) => (points.length
+    ? `${smoothPath(points)} L ${points[points.length - 1][0].toFixed(1)},${baseline} L ${points[0][0].toFixed(1)},${baseline} Z`
+    : '');
+
+  const segments = [];
+  activeIdx.forEach(i => {
+    let running = 0;
+    categoriesUsed.forEach(cat => {
+      const value = months[i].categories[cat] || 0;
+      if (value <= 0) return;
+      const topY = y(running + value);
+      const bottomY = y(running);
+      segments.push({
+        key: `${i}-${cat}`,
+        x: x(i) - barWidth / 2,
+        y: topY,
+        width: barWidth,
+        height: Math.max(0.5, bottomY - topY),
+        color: categoryColor(cat, EXPENSE_CATEGORIES),
+      });
+      running += value;
+    });
+  });
 
   return {
-    width, height, padding, x, y,
-    incomePoints: months.map((m, i) => `${x(i)},${y(m.income)}`).join(' '),
-    expensePoints: months.map((m, i) => `${x(i)},${y(m.expense)}`).join(' '),
-    gridlines: [0, 0.25, 0.5, 0.75, 1].map(pct => height - padding - pct * (height - padding * 2)),
+    width, height, padding, colWidth: stepX, months, x, y, gridlines, categoriesUsed, segments,
+    incomePath: smoothPath(incomePoints),
+    incomeArea: areaClose(incomePoints),
+    tooltipCategories: (idx) => Object.entries(months[idx].categories)
+      .filter(([, amount]) => amount > 0)
+      .map(([category, amount]) => ({ category, amount, color: categoryColor(category, EXPENSE_CATEGORIES) }))
+      .sort((a, b) => b.amount - a.amount),
+  };
+});
+
+const yearTooltipStyle = computed(() => {
+  if (hoveredIndex.value === null) return {};
+  const chart = yearChart.value;
+  const m = chart.months[hoveredIndex.value];
+  const leftPct = (chart.x(hoveredIndex.value) / chart.width) * 100;
+  const topPct = (Math.min(chart.y(m.income), chart.y(m.expense)) / chart.height) * 100;
+  return {
+    left: Math.min(88, Math.max(12, leftPct)) + '%',
+    top: Math.max(4, topPct) + '%',
   };
 });
 
@@ -1425,13 +1539,33 @@ function switchLangUrl(target) {
 }
 
 .year-view{ padding-top:4px; }
-.year-legend{ display:flex; justify-content:center; gap:22px; margin:10px 0 16px 0; font-size:12px; color:var(--ink); }
+.year-legend{ display:flex; flex-wrap:wrap; justify-content:center; gap:8px 16px; margin:10px 0 16px 0; font-size:11.5px; color:var(--ink); }
 .legend-item{ display:inline-flex; align-items:center; gap:6px; }
 .legend-item .swatch{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+.legend-item .swatch.line-swatch{ border-radius:2px; }
 
-.year-chart{ width:100%; height:auto; display:block; margin-bottom:18px; }
+.year-chart-wrap{ position:relative; margin-bottom:18px; }
+.year-chart{ width:100%; height:auto; display:block; }
 .year-gridline{ stroke:rgba(59,42,24,0.15); stroke-width:1; }
+.year-hover-line{ stroke:var(--gilt); stroke-width:1; stroke-dasharray:3,3; opacity:0.6; }
+.year-hit{ cursor:pointer; }
+.year-bar-seg{ transition:opacity 0.15s; }
 .year-axis-label{ font-size:9px; fill:var(--ink-light); font-family:Georgia,serif; }
+.year-axis-label.is-future{ opacity:0.4; }
+
+.year-tooltip{
+  position:absolute; transform:translate(-50%,-100%); margin-top:-8px;
+  background:var(--leather); color:var(--parchment); border:1px solid var(--gilt);
+  padding:8px 10px; font-size:11px; white-space:nowrap; pointer-events:none;
+  box-shadow:0 4px 12px rgba(0,0,0,0.35); z-index:5; font-family:'EB Garamond',Georgia,serif;
+}
+.year-tooltip strong{ display:block; margin-bottom:4px; font-variant:small-caps; color:var(--gilt-bright); font-size:12px; }
+.year-tooltip-row{ display:flex; align-items:center; gap:6px; margin-top:2px; }
+.year-tooltip-row .swatch{ width:8px; height:8px; border-radius:50%; display:inline-block; flex-shrink:0; }
+.year-tooltip-row .swatch.line-swatch{ border-radius:2px; }
+.year-tooltip-row.net{ margin-top:5px; padding-top:5px; border-top:1px solid rgba(184,137,43,0.3); font-weight:600; }
+.year-tooltip-row.pos{ color:var(--pos); }
+.year-tooltip-row.neg{ color:var(--seal); }
 
 .year-table{ width:100%; border-collapse:collapse; font-size:12px; }
 .year-table th{
