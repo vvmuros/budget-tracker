@@ -8,6 +8,7 @@ use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\ValidationException;
 
@@ -25,11 +26,15 @@ class AuthController extends Controller
 
     public function register(Request $request)
     {
+        $lang = $request->cookie('lang', 'sr');
+
         $data = $request->validate([
             'name' => ['required', 'string', 'min:2', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:6', 'confirmed'],
         ]);
+
+        $this->verifyCaptcha($request, $lang);
 
         $user = User::create([
             'name' => trim($data['name']),
@@ -193,6 +198,28 @@ class AuthController extends Controller
         return redirect()->route('login')->with('status', $lang === 'en'
             ? 'Your account and all its data have been deleted.'
             : 'Nalog i svi tvoji podaci su obrisani.');
+    }
+
+    private function verifyCaptcha(Request $request, string $lang): void
+    {
+        $secret = config('services.turnstile.secret_key');
+        if (! $secret) {
+            return;
+        }
+
+        $success = Http::asForm()->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
+            'secret' => $secret,
+            'response' => $request->input('cf-turnstile-response', ''),
+            'remoteip' => $request->ip(),
+        ])->json('success');
+
+        if (! $success) {
+            throw ValidationException::withMessages([
+                'email' => $lang === 'en'
+                    ? 'Please complete the verification challenge and try again.'
+                    : 'Molimo potvrdi da nisi robot i pokušaj ponovo.',
+            ]);
+        }
     }
 
     private function passwordStatusMessage(string $status, string $lang): string

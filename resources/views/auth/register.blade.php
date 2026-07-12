@@ -34,6 +34,9 @@ $t = [
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=IM+Fell+English+SC&family=Cinzel:wght@600;900&display=swap" rel="stylesheet">
+@if (config('services.turnstile.site_key'))
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+@endif
 <style>
   :root{
     --leather:#2E1B14; --leather-hi:#4A2A1E;
@@ -105,6 +108,9 @@ $t = [
       <input type="password" name="password" required>
       <label>{{ $t['password_confirm'][$lang] }}</label>
       <input type="password" name="password_confirmation" required>
+      @if (config('services.turnstile.site_key'))
+        <div class="cf-turnstile" data-sitekey="{{ config('services.turnstile.site_key') }}" style="margin-bottom:16px;"></div>
+      @endif
       <button type="submit">{{ $t['submit'][$lang] }}</button>
     </form>
     <div class="foot">{{ $t['has_account'][$lang] }} <a href="{{ route('login') }}">{{ $t['login_link'][$lang] }}</a></div>
