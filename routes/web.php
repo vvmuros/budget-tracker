@@ -14,6 +14,7 @@ Route::middleware('guest')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::get('/', [BudgetController::class, 'index'])->name('budget.index');
     Route::get('/api/budget', [BudgetController::class, 'fetch'])->name('budget.fetch');
+    Route::get('/api/budget/yearly', [BudgetController::class, 'yearly'])->name('budget.yearly');
     Route::post('/api/budget', [BudgetController::class, 'store'])->name('budget.store');
     Route::post('/api/budget/chat', [BudgetController::class, 'chat'])->middleware('throttle:15,1')->name('budget.chat');
     Route::post('/api/budget/analyze', [BudgetController::class, 'analyze'])->middleware('throttle:6,1')->name('budget.analyze');

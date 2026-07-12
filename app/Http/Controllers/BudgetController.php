@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BudgetData;
+use App\Models\User;
 use App\Services\GeminiClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -30,33 +31,28 @@ class BudgetController extends Controller
             $result['savings-items'] = $savings;
         }
 
-        $exactRows = $user->budgetData()->whereIn('key', self::PERIODIC_KEYS)->where('period', $period)->pluck('value', 'key');
-        foreach ($exactRows as $key => $value) {
-            $result[$key] = $value;
-        }
-
-        $missingKeys = array_diff(self::PERIODIC_KEYS, $exactRows->keys()->all());
-        $isNewPeriod = count($missingKeys) > 0;
-        $previousNet = null;
+        $isNewPeriod = false;
         $templatePeriod = null;
         $templateValues = [];
 
-        foreach ($missingKeys as $key) {
-            $row = $user->budgetData()
-                ->where('key', $key)
-                ->where('period', '<', $period)
-                ->orderByDesc('period')
-                ->first();
+        foreach (self::PERIODIC_KEYS as $key) {
+            $resolved = $this->resolveEffectiveValue($user, $key, $period);
+            if (! $resolved) {
+                continue;
+            }
 
-            if ($row) {
-                $result[$key] = $row->value;
-                $templateValues[$key] = $row->value;
-                if (! $templatePeriod || $row->period > $templatePeriod) {
-                    $templatePeriod = $row->period;
+            $result[$key] = $resolved['value'];
+
+            if (! $resolved['is_exact']) {
+                $isNewPeriod = true;
+                $templateValues[$key] = $resolved['value'];
+                if (! $templatePeriod || $resolved['period'] > $templatePeriod) {
+                    $templatePeriod = $resolved['period'];
                 }
             }
         }
 
+        $previousNet = null;
         if ($isNewPeriod && isset($templateValues['income-items'], $templateValues['expense-items'])) {
             $previousNet = $this->calculateNet(collect([
                 'income-items' => $templateValues['income-items'],
@@ -72,6 +68,46 @@ class BudgetController extends Controller
             'previous_net' => $previousNet,
             'template_period' => $templatePeriod,
         ]);
+    }
+
+    public function yearly(Request $request)
+    {
+        $user = $request->user();
+        $currentPeriod = now()->format('Y-m');
+        $yearStart = now()->format('Y').'-01';
+
+        $firstPeriod = $user->budgetData()->whereIn('key', self::PERIODIC_KEYS)->min('period');
+
+        if (! $firstPeriod) {
+            return response()->json(['months' => []]);
+        }
+
+        $startPeriod = max($firstPeriod, $yearStart);
+
+        $months = [];
+        $cursor = $startPeriod;
+
+        while ($cursor <= $currentPeriod) {
+            $income = $this->resolveEffectiveValue($user, 'income-items', $cursor);
+            $expense = $this->resolveEffectiveValue($user, 'expense-items', $cursor);
+            $rates = $this->resolveEffectiveValue($user, 'expense-rates', $cursor);
+
+            $ratesArr = json_decode($rates['value'] ?? '{}', true) ?: ['usd' => 0, 'eur' => 0];
+
+            $months[] = [
+                'period' => $cursor,
+                'income' => $this->sumActiveItems($income['value'] ?? '[]', $ratesArr),
+                'expense' => $this->sumActiveItems($expense['value'] ?? '[]', $ratesArr),
+            ];
+
+            $cursor = $this->incrementPeriod($cursor);
+        }
+
+        foreach ($months as &$month) {
+            $month['net'] = $month['income'] - $month['expense'];
+        }
+
+        return response()->json(['months' => $months]);
     }
 
     public function store(Request $request)
@@ -112,7 +148,7 @@ class BudgetController extends Controller
                 'currency' => ['type' => 'STRING', 'enum' => ['RSD', 'EUR', 'USD']],
                 'freq' => ['type' => 'INTEGER'],
             ],
-            'required' => ['action'],
+            'required' => ['action', 'name', 'amount', 'currency', 'freq'],
         ];
 
         $message = $data['message'];
@@ -127,8 +163,16 @@ class BudgetController extends Controller
 
         Ako je jasna, izvuci naziv stavke (name), iznos (amount, samo broj), valutu
         (currency: RSD/EUR/USD, podrazumevano RSD ako nije rečeno), i za trošak/primanje
-        učestalost (freq: 1=mesečno, 2=na 2 meseca, 3=na 3 meseca, 0=jednokratno;
-        podrazumevano 1 ako nije rečeno). Za štednju freq nije potreban.
+        učestalost (freq: 1=mesečno, 2=na 2 meseca, 3=na 3 meseca, 0=jednokratno).
+
+        Važno za freq: spontan pomen pojedinačne kupovine (kafa, taxi, gorivo, hrana,
+        poklon i slično) je JEDNOKRATAN trošak (freq=0) — to je podrazumevana vrednost.
+        Koristi mesečno/na 2 meseca/na 3 meseca SAMO ako poruka eksplicitno kaže da se
+        ponavlja ("mesečno", "svaki mesec", "na dva meseca", "pretplata", "članarina",
+        "rata", "kirija", "stanarina") ili opisuje očigledno ponavljajuću obavezu
+        (račun, članarina, rata kredita). Ne pretpostavljaj automatski da je nešto
+        mesečno samo zato što učestalost nije eksplicitno navedena. Za štednju freq
+        nije potreban.
         PROMPT;
 
         try {
@@ -187,24 +231,64 @@ class BudgetController extends Controller
 
     private function calculateNet(Collection $rows): ?float
     {
-        $income = json_decode($rows->get('income-items', '[]'), true) ?: [];
-        $expenses = json_decode($rows->get('expense-items', '[]'), true) ?: [];
         $rates = json_decode($rows->get('expense-rates', '{}'), true) ?: ['usd' => 0, 'eur' => 0];
 
-        $toRsd = function ($amount, $currency) use ($rates) {
-            return match ($currency) {
-                'USD' => $amount * ($rates['usd'] ?? 0),
-                'EUR' => $amount * ($rates['eur'] ?? 0),
-                default => $amount,
-            };
-        };
+        return $this->sumActiveItems($rows->get('income-items', '[]'), $rates)
+            - $this->sumActiveItems($rows->get('expense-items', '[]'), $rates);
+    }
 
-        $sumActive = function ($items) use ($toRsd) {
-            return collect($items)
-                ->filter(fn ($it) => $it['active'] ?? false)
-                ->sum(fn ($it) => $toRsd($it['amount'] ?? 0, $it['currency'] ?? 'RSD'));
-        };
+    private function sumActiveItems(string $json, array $rates): float
+    {
+        $items = json_decode($json, true) ?: [];
 
-        return $sumActive($income) - $sumActive($expenses);
+        return collect($items)
+            ->filter(fn ($it) => $it['active'] ?? false)
+            ->sum(fn ($it) => $this->toRsd($it['amount'] ?? 0, $it['currency'] ?? 'RSD', $rates));
+    }
+
+    private function toRsd(float $amount, string $currency, array $rates): float
+    {
+        return match ($currency) {
+            'USD' => $amount * ($rates['usd'] ?? 0),
+            'EUR' => $amount * ($rates['eur'] ?? 0),
+            default => $amount,
+        };
+    }
+
+    /**
+     * Finds the effective value for a key at a given period: the exact row if it
+     * exists, otherwise the nearest prior period's row (used as a carry-forward
+     * template). Returns null if nothing exists at or before the period.
+     */
+    private function resolveEffectiveValue(User $user, string $key, string $period): ?array
+    {
+        $exact = $user->budgetData()->where('key', $key)->where('period', $period)->first();
+        if ($exact) {
+            return ['value' => $exact->value, 'period' => $period, 'is_exact' => true];
+        }
+
+        $row = $user->budgetData()
+            ->where('key', $key)
+            ->where('period', '<', $period)
+            ->orderByDesc('period')
+            ->first();
+
+        if ($row) {
+            return ['value' => $row->value, 'period' => $row->period, 'is_exact' => false];
+        }
+
+        return null;
+    }
+
+    private function incrementPeriod(string $period): string
+    {
+        [$year, $month] = array_map('intval', explode('-', $period));
+        $month++;
+        if ($month > 12) {
+            $month = 1;
+            $year++;
+        }
+
+        return sprintf('%04d-%02d', $year, $month);
     }
 }

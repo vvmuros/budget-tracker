@@ -23,7 +23,7 @@ class GeminiClient
             ];
         }
 
-        $response = Http::timeout(15)->post(
+        $response = Http::timeout(20)->post(
             "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$key}",
             $payload
         );

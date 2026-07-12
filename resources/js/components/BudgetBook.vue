@@ -13,6 +13,9 @@
           <span class="month-label">{{ currentPeriodLabel }}</span>
           <button class="nav-btn" :disabled="fetching" @click="goNext" aria-label="Sledeći mesec">›</button>
         </div>
+        <div class="year-toggle-row">
+          <button class="reset-link" @click="toggleYearView">{{ showYearView ? '← Nazad na mesec' : '📊 Analiza godine' }}</button>
+        </div>
 
         <div class="chat-box">
           <div class="chat-log" ref="chatLogEl">
@@ -39,6 +42,57 @@
 
         <div v-if="loading" class="foot-note">Učitavanje knjižice…</div>
 
+        <div v-else-if="showYearView" class="year-view">
+          <div class="section-title">Analiza {{ currentYearLabel }}</div>
+
+          <div v-if="yearLoading" class="foot-note">Učitavanje analize…</div>
+
+          <template v-else-if="yearMonths.length">
+            <div class="year-legend">
+              <span class="legend-item"><span class="swatch" :style="{ background: YEAR_COLORS.income }"></span>Primanja</span>
+              <span class="legend-item"><span class="swatch" :style="{ background: YEAR_COLORS.expense }"></span>Troškovi</span>
+            </div>
+
+            <svg class="year-chart" :viewBox="`0 0 ${yearChart.width} ${yearChart.height}`" preserveAspectRatio="xMidYMid meet">
+              <line
+                v-for="(gl, idx) in yearChart.gridlines" :key="idx"
+                :x1="yearChart.padding" :x2="yearChart.width - yearChart.padding"
+                :y1="gl" :y2="gl" class="year-gridline"
+              />
+              <polyline :points="yearChart.expensePoints" fill="none" :stroke="YEAR_COLORS.expense" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+              <polyline :points="yearChart.incomePoints" fill="none" :stroke="YEAR_COLORS.income" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+              <circle
+                v-for="(m, i) in yearMonths" :key="'inc'+i"
+                :cx="yearChart.x(i)" :cy="yearChart.y(m.income)" r="4"
+                :fill="YEAR_COLORS.income" stroke="var(--parchment)" stroke-width="2"
+              ><title>{{ periodLabel(m.period) }} — primanja: {{ fmt(m.income) }} RSD</title></circle>
+              <circle
+                v-for="(m, i) in yearMonths" :key="'exp'+i"
+                :cx="yearChart.x(i)" :cy="yearChart.y(m.expense)" r="4"
+                :fill="YEAR_COLORS.expense" stroke="var(--parchment)" stroke-width="2"
+              ><title>{{ periodLabel(m.period) }} — troškovi: {{ fmt(m.expense) }} RSD</title></circle>
+              <text
+                v-for="(m, i) in yearMonths" :key="'lbl'+i"
+                :x="yearChart.x(i)" :y="yearChart.height - 8" class="year-axis-label" text-anchor="middle"
+              >{{ monthAbbrev(m.period) }}</text>
+            </svg>
+
+            <table class="year-table">
+              <thead><tr><th>Mesec</th><th>Primanja</th><th>Troškovi</th><th>Neto</th></tr></thead>
+              <tbody>
+                <tr v-for="m in yearMonths" :key="m.period">
+                  <td>{{ periodLabel(m.period) }}</td>
+                  <td>{{ fmt(m.income) }} RSD</td>
+                  <td>{{ fmt(m.expense) }} RSD</td>
+                  <td :class="m.net >= 0 ? 'pos' : 'neg'">{{ signed(m.net) }} RSD</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+
+          <div v-else class="foot-note">Nema još podataka za analizu ove godine.</div>
+        </div>
+
         <Transition v-else :name="navDirection === 'next' ? 'page-next' : 'page-prev'" mode="out-in">
           <div :key="currentPeriod" class="month-content" :class="{ 'is-fetching': fetching }">
 
@@ -64,7 +118,7 @@
                 </tr>
               </thead>
               <TransitionGroup tag="tbody" name="row">
-                <tr v-for="(item, i) in income" :key="keyFor(item)" :class="{ inactive: !item.active }">
+                <tr v-for="item in visibleIncome" :key="keyFor(item)" :class="{ inactive: !item.active }">
                   <td class="cell-name"><input type="text" v-model="item.name" @change="saveIncome"></td>
                   <td class="amt-col" data-label="Iznos"><input type="number" v-model.number="item.amount" step="1" @change="saveIncome"></td>
                   <td class="cur-col" data-label="Valuta">
@@ -83,11 +137,14 @@
                     </select>
                   </td>
                   <td class="chk-col" data-label="Aktivno"><input type="checkbox" v-model="item.active" @change="saveIncome"></td>
-                  <td class="del-col"><button class="del-btn" @click="removeRow(income, i, saveIncome)">×</button></td>
+                  <td class="del-col"><button class="del-btn" @click="removeRow(income, item, saveIncome)">×</button></td>
                 </tr>
               </TransitionGroup>
             </table>
             <button class="add-row" @click="addRow(income, 'Novo primanje', saveIncome)">+ upiši primanje</button>
+            <button v-if="oneTimeIncomeCount > 0" class="reset-link load-more-btn" @click="showOneTimeIncome = !showOneTimeIncome">
+              {{ showOneTimeIncome ? 'Sakrij jednokratna primanja' : 'Prikaži jednokratna primanja' }} ({{ oneTimeIncomeCount }})
+            </button>
 
             <div class="section-title">Troškovi</div>
             <table>
@@ -104,7 +161,7 @@
                 </tr>
               </thead>
               <TransitionGroup tag="tbody" name="row">
-                <tr v-for="(item, i) in expenses" :key="keyFor(item)" :class="{ inactive: !isExpenseActive(item) }">
+                <tr v-for="item in visibleExpenses" :key="keyFor(item)" :class="{ inactive: !isExpenseActive(item) }">
                   <td class="cell-name"><input type="text" v-model="item.name" @change="saveExpenses"></td>
                   <td class="amt-col" data-label="Iznos"><input type="number" v-model.number="item.amount" step="1" @change="saveExpenses"></td>
                   <td class="cur-col" data-label="Valuta">
@@ -129,11 +186,14 @@
                     </select>
                   </td>
                   <td class="chk-col" data-label="Aktivno"><input type="checkbox" v-model="item.active" @change="saveExpenses"></td>
-                  <td class="del-col"><button class="del-btn" @click="removeRow(expenses, i, saveExpenses)">×</button></td>
+                  <td class="del-col"><button class="del-btn" @click="removeRow(expenses, item, saveExpenses)">×</button></td>
                 </tr>
               </TransitionGroup>
             </table>
             <button class="add-row" @click="addRow(expenses, 'Nova stavka', saveExpenses)">+ upiši trošak</button>
+            <button v-if="oneTimeExpensesCount > 0" class="reset-link load-more-btn" @click="showOneTimeExpenses = !showOneTimeExpenses">
+              {{ showOneTimeExpenses ? 'Sakrij jednokratne troškove' : 'Prikaži jednokratne troškove' }} ({{ oneTimeExpensesCount }})
+            </button>
 
             <div class="chart-section" v-if="categoryBreakdown.length">
               <div class="cat-bar-row" v-for="slice in categoryBreakdown" :key="slice.category">
@@ -157,7 +217,7 @@
                 </tr>
               </thead>
               <TransitionGroup tag="tbody" name="row">
-                <tr v-for="(item, i) in savings" :key="keyFor(item)">
+                <tr v-for="item in savings" :key="keyFor(item)">
                   <td class="cell-name"><input type="text" v-model="item.name" @change="saveSavings"></td>
                   <td class="amt-col" data-label="Iznos"><input type="number" v-model.number="item.amount" step="1" @change="saveSavings"></td>
                   <td class="cur-col" data-label="Valuta">
@@ -172,7 +232,7 @@
                       <option v-for="cat in SAVINGS_CATEGORIES" :key="cat" :value="cat">{{ cat }}</option>
                     </select>
                   </td>
-                  <td class="del-col"><button class="del-btn" @click="removeRow(savings, i, saveSavings)">×</button></td>
+                  <td class="del-col"><button class="del-btn" @click="removeRow(savings, item, saveSavings)">×</button></td>
                 </tr>
               </TransitionGroup>
             </table>
@@ -381,8 +441,9 @@ function addSavingsRow() {
   savings.push({ name: 'Nova stavka', amount: 0, currency: 'RSD', category: 'Ostalo' });
   saveSavings();
 }
-function removeRow(arr, i, save) {
-  arr.splice(i, 1);
+function removeRow(arr, item, save) {
+  const idx = arr.indexOf(item);
+  if (idx !== -1) arr.splice(idx, 1);
   save();
 }
 
@@ -406,6 +467,21 @@ function signed(n) { return (n >= 0 ? '+' : '') + fmt(n); }
 function isExpenseActive(item) {
   return item.active && (!item.endPeriod || currentPeriod.value <= item.endPeriod);
 }
+
+const showOneTimeExpenses = ref(false);
+const showOneTimeIncome = ref(false);
+
+const oneTimeExpensesCount = computed(() => expenses.filter(it => it.freq === 0).length);
+const oneTimeIncomeCount = computed(() => income.filter(it => it.freq === 0).length);
+
+const visibleExpenses = computed(() => {
+  const recurring = expenses.filter(it => it.freq !== 0);
+  return showOneTimeExpenses.value ? [...recurring, ...expenses.filter(it => it.freq === 0)] : recurring;
+});
+const visibleIncome = computed(() => {
+  const recurring = income.filter(it => it.freq !== 0);
+  return showOneTimeIncome.value ? [...recurring, ...income.filter(it => it.freq === 0)] : recurring;
+});
 
 const expThis = computed(() => expenses.reduce((sum, it) => isExpenseActive(it) ? sum + toRSD(it.amount, it.currency) : sum, 0));
 const incThis = computed(() => income.reduce((sum, it) => it.active ? sum + toRSD(it.amount, it.currency) : sum, 0));
@@ -570,6 +646,51 @@ function closeAnalysis() {
   analysisText.value = '';
   analysisError.value = '';
 }
+
+const showYearView = ref(false);
+const yearMonths = ref([]);
+const yearLoading = ref(false);
+const currentYearLabel = computed(() => currentPeriod.value.split('-')[0]);
+const YEAR_COLORS = { income: CATEGORY_COLORS[2], expense: CATEGORY_COLORS[1] };
+
+async function toggleYearView() {
+  showYearView.value = !showYearView.value;
+  if (showYearView.value && yearMonths.value.length === 0 && !yearLoading.value) {
+    yearLoading.value = true;
+    try {
+      const { data } = await axios.get('/api/budget/yearly');
+      yearMonths.value = data.months;
+    } finally {
+      yearLoading.value = false;
+    }
+  }
+}
+
+function monthAbbrev(period) {
+  const [, m] = period.split('-').map(Number);
+  return MONTH_NAMES[m - 1].slice(0, 3);
+}
+
+const yearChart = computed(() => {
+  const width = 640, height = 220, padding = 32;
+  const months = yearMonths.value;
+
+  if (!months.length) {
+    return { width, height, padding, x: () => 0, y: () => 0, incomePoints: '', expensePoints: '', gridlines: [] };
+  }
+
+  const maxVal = Math.max(1, ...months.flatMap(m => [m.income, m.expense]));
+  const stepX = months.length > 1 ? (width - padding * 2) / (months.length - 1) : 0;
+  const x = (i) => padding + i * stepX;
+  const y = (v) => height - padding - (v / maxVal) * (height - padding * 2);
+
+  return {
+    width, height, padding, x, y,
+    incomePoints: months.map((m, i) => `${x(i)},${y(m.income)}`).join(' '),
+    expensePoints: months.map((m, i) => `${x(i)},${y(m.expense)}`).join(' '),
+    gridlines: [0, 0.25, 0.5, 0.75, 1].map(t => height - padding - t * (height - padding * 2)),
+  };
+});
 </script>
 
 <style>
@@ -762,6 +883,26 @@ function closeAnalysis() {
 }
 .cat-bar-pct{ color:var(--ink-light); opacity:0.8; }
 
+.year-toggle-row{ text-align:center; margin-bottom:6px; }
+
+.year-view{ padding-top:4px; }
+.year-legend{ display:flex; justify-content:center; gap:22px; margin:10px 0 16px 0; font-size:12px; color:var(--ink); }
+.legend-item{ display:inline-flex; align-items:center; gap:6px; }
+.legend-item .swatch{ width:10px; height:10px; border-radius:50%; display:inline-block; }
+
+.year-chart{ width:100%; height:auto; display:block; margin-bottom:18px; }
+.year-gridline{ stroke:rgba(59,42,24,0.15); stroke-width:1; }
+.year-axis-label{ font-size:9px; fill:var(--ink-light); font-family:Georgia,serif; }
+
+.year-table{ width:100%; border-collapse:collapse; font-size:12px; }
+.year-table th{
+  font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--ink-light);
+  font-variant:small-caps; text-align:left; padding:0 6px 8px 6px; border-bottom:1px solid var(--ink-light);
+}
+.year-table td{ padding:6px; border-bottom:1px dotted rgba(59,42,24,0.3); color:var(--ink); }
+.year-table td.pos{ color:var(--pos); }
+.year-table td.neg{ color:var(--seal); }
+
 .rates{
   display:flex; gap:26px; flex-wrap:wrap;
   border-top:1px solid var(--ink-light); border-bottom:1px solid var(--ink-light);
@@ -812,6 +953,7 @@ function closeAnalysis() {
 
 .foot-note{ margin-top:24px; font-size:11px; font-style:italic; color:var(--ink-light); text-align:center; }
 .reset-link{ background:none; border:none; color:var(--ink-light); font-family:Georgia,serif; font-size:10.5px; font-style:italic; text-decoration:underline; cursor:pointer; padding:0; }
+.load-more-btn{ display:block; margin:8px 0 4px 0; }
 
 .chat-box{
   border:1px solid var(--ink-light); border-radius:6px; padding:10px 12px;
