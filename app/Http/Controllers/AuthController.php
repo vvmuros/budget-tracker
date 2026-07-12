@@ -151,6 +151,29 @@ class AuthController extends Controller
             : 'Poslali smo ti novi link za potvrdu na email.');
     }
 
+    public function deleteAccount(Request $request)
+    {
+        $lang = $request->cookie('lang', 'sr');
+
+        $request->validate(['password' => ['required', 'string']]);
+
+        if (! Hash::check($request->input('password'), $request->user()->password)) {
+            return back()->withErrors(['password' => $lang === 'en'
+                ? 'Incorrect password.'
+                : 'Pogrešna lozinka.']);
+        }
+
+        $user = $request->user();
+        Auth::logout();
+        $user->delete();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()->route('login')->with('status', $lang === 'en'
+            ? 'Your account and all its data have been deleted.'
+            : 'Nalog i svi tvoji podaci su obrisani.');
+    }
+
     private function passwordStatusMessage(string $status, string $lang): string
     {
         $messages = [

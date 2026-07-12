@@ -31,6 +31,8 @@ Route::middleware('auth')->group(function () {
         ->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
     Route::post('/email/verification-notification', [AuthController::class, 'resendVerification'])
         ->middleware('throttle:6,1')->name('verification.send');
+    Route::post('/account/delete', [AuthController::class, 'deleteAccount'])
+        ->middleware('throttle:6,1')->name('account.delete');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });
 
