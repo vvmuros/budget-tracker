@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/lang/{locale}', function (string $locale) {
     abort_unless(in_array($locale, ['sr', 'en'], true), 404);
-    Cookie::queue('lang', $locale, 60 * 24 * 365);
+    Cookie::queue(Cookie::make('lang', $locale, 60 * 24 * 365, null, null, null, false));
 
     return redirect()->back();
 })->name('lang.switch');

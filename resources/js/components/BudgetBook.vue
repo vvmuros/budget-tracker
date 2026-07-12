@@ -62,6 +62,7 @@
           <h1>{{ t('title') }}</h1>
           <div class="sub">{{ t('subtitle') }}</div>
           <svg class="flourish" viewBox="0 0 120 10"><path d="M0 5 H45 M75 5 H120 M55 5 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0" stroke="#B8892B" stroke-width="1" fill="none"/></svg>
+          <div v-if="!loading" class="greeting">{{ dataGreeting }}</div>
         </div>
 
         <div v-if="loading" class="foot-note">{{ t('loadingBook') }}</div>
@@ -206,7 +207,10 @@
                       <option :value="0">{{ t('oneTime') }}</option>
                     </select>
                   </td>
-                  <td class="end-col" :data-label="t('untilMonth')"><input type="month" v-model="item.endPeriod" @change="saveExpenses"></td>
+                  <td class="end-col" :data-label="t('untilMonth')">
+                    <button type="button" class="month-picker-btn" @click="openMonthPicker($event)">{{ item.endPeriod ? formatEndPeriod(item.endPeriod) : '—' }}</button>
+                    <input type="month" v-model="item.endPeriod" class="month-picker-input" @change="saveExpenses">
+                  </td>
                   <td class="cat-col" :data-label="t('category')">
                     <select v-model="item.category" @change="saveExpenses">
                       <option v-for="cat in EXPENSE_CATEGORIES" :key="cat" :value="cat">{{ categoryLabel(cat) }}</option>
@@ -630,6 +634,7 @@ const dismissedPeriods = new Set();
 async function loadState(period) {
   fetching.value = true;
   bannerVisible.value = false;
+  greetingSeed.value = Math.floor(Math.random() * 100);
 
   replaceArray(expenses, clone(defaultExpenses));
   replaceArray(income, clone(defaultIncome));
@@ -712,6 +717,44 @@ function signed(n) { return (n >= 0 ? '+' : '') + fmt(n); }
 function isExpenseActive(item) {
   return item.active && (!item.endPeriod || currentPeriod.value <= item.endPeriod);
 }
+
+const GREETING_TEMPLATES = {
+  sr: [
+    (name, amount) => `O ne, ${name}? Opet ${amount} RSD?`,
+    (name, amount) => `${name} — ozbiljno, opet?`,
+    (name, amount) => `Najveći trošak ovog meseca: ${name} (${amount} RSD). Vau.`,
+    (name, amount) => `${amount} RSD na "${name}"? Dobro, dobro.`,
+    (name, amount) => `Knjiga primećuje: ${name} ti je pojeo ${amount} RSD.`,
+  ],
+  en: [
+    (name, amount) => `Oh no, ${name} again? ${amount} RSD?`,
+    (name, amount) => `${name} — seriously, again?`,
+    (name, amount) => `Biggest expense this month: ${name} (${amount} RSD). Wow.`,
+    (name, amount) => `${amount} RSD on "${name}"? Okay then.`,
+    (name, amount) => `The ledger notices: ${name} ate ${amount} RSD of your money.`,
+  ],
+};
+const FALLBACK_GREETINGS = {
+  sr: ['Prazna stranica — hajde da je popunimo.', 'Dobrodošao nazad u knjižicu.', 'Šta ima novo ovog meseca?'],
+  en: ['A blank page — let\'s fill it in.', 'Welcome back to the book.', "What's new this month?"],
+};
+const greetingSeed = ref(Math.floor(Math.random() * 100));
+
+const dataGreeting = computed(() => {
+  const active = expenses.filter(isExpenseActive);
+  const templates = GREETING_TEMPLATES[lang.value] ?? GREETING_TEMPLATES.sr;
+  const fallbacks = FALLBACK_GREETINGS[lang.value] ?? FALLBACK_GREETINGS.sr;
+
+  if (!active.length) {
+    return fallbacks[greetingSeed.value % fallbacks.length];
+  }
+
+  const biggest = active.reduce((max, it) => (
+    toRSD(it.amount, it.currency) > toRSD(max.amount, max.currency) ? it : max
+  ));
+
+  return templates[greetingSeed.value % templates.length](biggest.name, fmt(toRSD(biggest.amount, biggest.currency)));
+});
 
 const showOneTimeExpenses = ref(false);
 const showOneTimeIncome = ref(false);
@@ -1066,6 +1109,21 @@ function monthAbbrev(period) {
   return MONTH_NAMES.value[m - 1].slice(0, 3);
 }
 
+function formatEndPeriod(period) {
+  const [y] = period.split('-');
+  return monthAbbrev(period) + ' ' + y;
+}
+
+function openMonthPicker(event) {
+  const input = event.currentTarget.nextElementSibling;
+  if (!input) return;
+  if (typeof input.showPicker === 'function') {
+    input.showPicker();
+  } else {
+    input.focus();
+  }
+}
+
 const yearChart = computed(() => {
   const width = 640, height = 220, padding = 32;
   const months = yearMonths.value;
@@ -1249,6 +1307,7 @@ function switchLangUrl(target) {
 .masthead h1{ margin:0; font-size:30px; letter-spacing:2px; color:var(--ink); font-family:'Cinzel',Georgia,serif; font-weight:900; }
 .masthead h1::first-letter{ font-size:48px; color:var(--seal); font-family:'Cinzel',Georgia,serif; }
 .masthead .sub{ font-size:12px; font-style:italic; color:var(--ink-light); margin-top:6px; }
+.masthead .greeting{ font-size:11.5px; font-style:italic; color:var(--gilt); margin-top:10px; opacity:0.9; }
 .flourish{ margin:8px auto 0 auto; width:120px; height:10px; opacity:0.6; }
 
 .section-title{
@@ -1291,15 +1350,25 @@ function switchLangUrl(target) {
   background:transparent; border:none; border-bottom:1px solid transparent; padding:3px 0;
 }
 .page select:focus{ outline:none; border-bottom:1px solid var(--gilt); }
+.page select option{ color:#1a1208; background:#fff; }
 
 .amt-col{ width:90px; }
 .cur-col{ width:64px; }
 .freq-col{ width:120px; }
-.end-col{ width:120px; }
+.end-col{ width:66px; position:relative; }
 .cat-col{ width:110px; }
 .chk-col{ width:36px; text-align:center; }
 .del-col{ width:26px; text-align:center; }
-.end-col input[type=month]{ font-size:12px; }
+
+.month-picker-btn{
+  background:none; border:none; color:var(--ink); font-family:Georgia,serif; font-size:12.5px;
+  cursor:pointer; text-decoration:underline; text-decoration-style:dotted; text-decoration-color:var(--ink-light);
+  padding:3px 2px; text-align:left; white-space:nowrap;
+}
+.month-picker-input{
+  position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;
+  overflow:hidden; border:none; padding:0;
+}
 
 .del-btn{ background:none; border:none; color:var(--seal); cursor:pointer; display:inline-flex; padding:4px; }
 .del-btn:hover{ opacity:0.7; }
