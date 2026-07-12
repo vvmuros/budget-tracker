@@ -2,13 +2,25 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BudgetController;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/lang/{locale}', function (string $locale) {
+    abort_unless(in_array($locale, ['sr', 'en'], true), 404);
+    Cookie::queue('lang', $locale, 60 * 24 * 365);
+
+    return redirect()->back();
+})->name('lang.switch');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login']);
     Route::get('/register', [AuthController::class, 'showRegister'])->name('register');
     Route::post('/register', [AuthController::class, 'register']);
+    Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])->name('password.request');
+    Route::post('/forgot-password', [AuthController::class, 'sendResetLink'])->middleware('throttle:6,1')->name('password.email');
+    Route::get('/reset-password/{token}', [AuthController::class, 'showResetPassword'])->name('password.reset');
+    Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('password.update');
 });
 
 Route::middleware('auth')->group(function () {

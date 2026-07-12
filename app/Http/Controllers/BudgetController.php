@@ -160,33 +160,66 @@ class BudgetController extends Controller
 
         $message = $data['message'];
         $categoryList = implode(', ', $categories);
-        $prompt = <<<PROMPT
-        Korisnik je napisao poruku o svojim finansijama na srpskom: "{$message}"
+        $lang = $request->cookie('lang', 'sr');
 
-        Prepoznaj da li korisnik želi da:
-        - doda trošak (add_expense)
-        - doda primanje/prihod (add_income)
-        - doda stavku štednje/imovine (add_saving)
-        - ili poruka nije jasna (unclear)
+        if ($lang === 'en') {
+            $prompt = <<<PROMPT
+            The user wrote a message about their finances: "{$message}"
 
-        Ako je jasna, izvuci naziv stavke (name), iznos (amount, samo broj), valutu
-        (currency: RSD/EUR/USD, podrazumevano RSD ako nije rečeno), i za trošak/primanje
-        učestalost (freq: 1=mesečno, 2=na 2 meseca, 3=na 3 meseca, 0=jednokratno).
+            Determine whether the user wants to:
+            - add an expense (add_expense)
+            - add income (add_income)
+            - add a savings/asset item (add_saving)
+            - or the message is unclear (unclear)
 
-        Važno za freq: spontan pomen pojedinačne kupovine (kafa, taxi, gorivo, hrana,
-        poklon i slično) je JEDNOKRATAN trošak (freq=0) — to je podrazumevana vrednost.
-        Koristi mesečno/na 2 meseca/na 3 meseca SAMO ako poruka eksplicitno kaže da se
-        ponavlja ("mesečno", "svaki mesec", "na dva meseca", "pretplata", "članarina",
-        "rata", "kirija", "stanarina") ili opisuje očigledno ponavljajuću obavezu
-        (račun, članarina, rata kredita). Ne pretpostavljaj automatski da je nešto
-        mesečno samo zato što učestalost nije eksplicitno navedena. Za štednju freq
-        nije potreban.
+            If clear, extract the item name (name), amount (amount, number only),
+            currency (currency: RSD/EUR/USD, default RSD if not stated), and for
+            expense/income the frequency (freq: 1=monthly, 2=every 2 months,
+            3=every 3 months, 0=one-time).
 
-        Ako je add_expense ili add_saving, izaberi najprikladniju kategoriju (category)
-        iz ove liste na osnovu naziva stavke: {$categoryList}. Ako nijedna jasno ne
-        odgovara, koristi "Ostalo". Za add_income ili unclear, postavi category na
-        "Ostalo".
-        PROMPT;
+            Important for freq: a spontaneous mention of a single purchase (coffee,
+            taxi, fuel, food, a gift, etc.) is a ONE-TIME expense (freq=0) — that is
+            the default. Only use monthly/every-2-months/every-3-months if the
+            message explicitly says it repeats ("monthly", "every month",
+            "subscription", "membership", "installment", "rent") or clearly
+            describes a recurring obligation (bill, membership, loan installment).
+            Don't assume something is monthly just because frequency wasn't stated.
+            Savings items don't need freq.
+
+            If add_expense or add_saving, pick the best matching category
+            (category) from this list based on the item name: {$categoryList}. If
+            none clearly match, use "Ostalo". For add_income or unclear, set
+            category to "Ostalo".
+            PROMPT;
+        } else {
+            $prompt = <<<PROMPT
+            Korisnik je napisao poruku o svojim finansijama na srpskom: "{$message}"
+
+            Prepoznaj da li korisnik želi da:
+            - doda trošak (add_expense)
+            - doda primanje/prihod (add_income)
+            - doda stavku štednje/imovine (add_saving)
+            - ili poruka nije jasna (unclear)
+
+            Ako je jasna, izvuci naziv stavke (name), iznos (amount, samo broj), valutu
+            (currency: RSD/EUR/USD, podrazumevano RSD ako nije rečeno), i za trošak/primanje
+            učestalost (freq: 1=mesečno, 2=na 2 meseca, 3=na 3 meseca, 0=jednokratno).
+
+            Važno za freq: spontan pomen pojedinačne kupovine (kafa, taxi, gorivo, hrana,
+            poklon i slično) je JEDNOKRATAN trošak (freq=0) — to je podrazumevana vrednost.
+            Koristi mesečno/na 2 meseca/na 3 meseca SAMO ako poruka eksplicitno kaže da se
+            ponavlja ("mesečno", "svaki mesec", "na dva meseca", "pretplata", "članarina",
+            "rata", "kirija", "stanarina") ili opisuje očigledno ponavljajuću obavezu
+            (račun, članarina, rata kredita). Ne pretpostavljaj automatski da je nešto
+            mesečno samo zato što učestalost nije eksplicitno navedena. Za štednju freq
+            nije potreban.
+
+            Ako je add_expense ili add_saving, izaberi najprikladniju kategoriju (category)
+            iz ove liste na osnovu naziva stavke: {$categoryList}. Ako nijedna jasno ne
+            odgovara, koristi "Ostalo". Za add_income ili unclear, postavi category na
+            "Ostalo".
+            PROMPT;
+        }
 
         try {
             $raw = $gemini->generate($prompt, $schema);
@@ -213,6 +246,7 @@ class BudgetController extends Controller
 
         $categories = array_values(array_unique($data['expense_categories']));
         $categoryList = implode(', ', $categories);
+        $lang = $request->cookie('lang', 'sr');
 
         $schema = [
             'type' => 'OBJECT',
@@ -226,15 +260,28 @@ class BudgetController extends Controller
             'required' => ['action', 'name', 'amount', 'currency', 'category'],
         ];
 
-        $prompt = <<<PROMPT
-        Ovo je slika računa iz prodavnice. Pročitaj naziv prodavnice ili glavnu stavku
-        (name), ukupan iznos za plaćanje (amount, samo broj), valutu (currency:
-        RSD/EUR/USD, podrazumevano RSD) i najprikladniju kategoriju (category) iz ove
-        liste: {$categoryList}. Ako nijedna jasno ne odgovara, koristi "Ostalo".
+        if ($lang === 'en') {
+            $prompt = <<<PROMPT
+            This is a photo of a store receipt. Read the store name or main item
+            (name), the total amount due (amount, number only), the currency
+            (currency: RSD/EUR/USD, default RSD) and the best matching category
+            (category) from this list: {$categoryList}. If none clearly match, use
+            "Ostalo".
 
-        Ako slika nije čitljiva ili ne liči na račun, vrati action=unclear.
-        Inače vrati action=add_expense.
-        PROMPT;
+            If the image is unreadable or doesn't look like a receipt, return
+            action=unclear. Otherwise return action=add_expense.
+            PROMPT;
+        } else {
+            $prompt = <<<PROMPT
+            Ovo je slika računa iz prodavnice. Pročitaj naziv prodavnice ili glavnu stavku
+            (name), ukupan iznos za plaćanje (amount, samo broj), valutu (currency:
+            RSD/EUR/USD, podrazumevano RSD) i najprikladniju kategoriju (category) iz ove
+            liste: {$categoryList}. Ako nijedna jasno ne odgovara, koristi "Ostalo".
+
+            Ako slika nije čitljiva ili ne liči na račun, vrati action=unclear.
+            Inače vrati action=add_expense.
+            PROMPT;
+        }
 
         try {
             $raw = $gemini->generate($prompt, $schema, [
@@ -269,24 +316,46 @@ class BudgetController extends Controller
             ->map(fn ($it) => "- {$it['name']}: {$it['amount']} {$it['currency']}")
             ->implode("\n");
 
-        $prompt = <<<PROMPT
-        Ti si finansijski asistent. Evo sažetka mesečnog budžeta korisnika (period {$data['period']}):
+        $lang = $request->cookie('lang', 'sr');
 
-        Ukupna primanja: {$data['income_total']} RSD
-        Ukupni troškovi: {$data['expense_total']} RSD
-        Neto: {$data['net']} RSD
+        if ($lang === 'en') {
+            $prompt = <<<PROMPT
+            You are a financial assistant. Here is a summary of the user's monthly
+            budget (period {$data['period']}):
 
-        Aktivni troškovi:
-        {$expenseLines}
+            Total income: {$data['income_total']} RSD
+            Total expenses: {$data['expense_total']} RSD
+            Net: {$data['net']} RSD
 
-        Daj kratak, konkretan savet na srpskom (2-4 rečenice) o ovoj potrošnji — istakni
-        nešto specifično iz liste troškova ako je moguće, ne generičke fraze.
-        PROMPT;
+            Active expenses:
+            {$expenseLines}
+
+            Give a short, concrete piece of advice in English (2-4 sentences) about
+            this spending — call out something specific from the expense list if
+            possible, not generic phrases.
+            PROMPT;
+        } else {
+            $prompt = <<<PROMPT
+            Ti si finansijski asistent. Evo sažetka mesečnog budžeta korisnika (period {$data['period']}):
+
+            Ukupna primanja: {$data['income_total']} RSD
+            Ukupni troškovi: {$data['expense_total']} RSD
+            Neto: {$data['net']} RSD
+
+            Aktivni troškovi:
+            {$expenseLines}
+
+            Daj kratak, konkretan savet na srpskom (2-4 rečenice) o ovoj potrošnji — istakni
+            nešto specifično iz liste troškova ako je moguće, ne generičke fraze.
+            PROMPT;
+        }
 
         try {
             $tip = $gemini->generate($prompt);
         } catch (\Throwable) {
-            return response()->json(['error' => 'Analiza trenutno nije dostupna.'], 502);
+            $message = $lang === 'en' ? 'Analysis is currently unavailable.' : 'Analiza trenutno nije dostupna.';
+
+            return response()->json(['error' => $message], 502);
         }
 
         return response()->json(['tip' => trim($tip)]);

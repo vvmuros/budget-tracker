@@ -1,5 +1,8 @@
+<?php
+$lang = request()->cookie('lang', 'sr');
+?>
 <!DOCTYPE html>
-<html lang="sr">
+<html lang="{{ $lang }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -14,7 +17,7 @@
 </script>
 <meta name="theme-color" content="#2E1B14">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-<title>Knjižica troškova — antikvarno izdanje</title>
+<title>{{ $lang === 'en' ? 'Budget Book — antique edition' : 'Knjižica troškova — antikvarno izdanje' }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=IM+Fell+English+SC&family=Cinzel:wght@600;900&display=swap" rel="stylesheet">
@@ -52,7 +55,7 @@
     <span>{{ auth()->user()->name }} ({{ auth()->user()->email }})</span>
     <form method="POST" action="{{ route('logout') }}">
       @csrf
-      <button type="submit">Odjavi se</button>
+      <button type="submit">{{ $lang === 'en' ? 'Log out' : 'Odjavi se' }}</button>
     </form>
   </div>
 

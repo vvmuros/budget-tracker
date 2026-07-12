@@ -2,16 +2,12 @@
 $lang = request()->cookie('lang', 'sr');
 $t = [
     'html_lang' => ['sr' => 'sr', 'en' => 'en'],
-    'title' => ['sr' => 'Prijava — Knjižica troškova', 'en' => 'Log in — Budget Book'],
+    'title' => ['sr' => 'Zaboravljena šifra — Knjižica troškova', 'en' => 'Forgot password — Budget Book'],
     'heading' => ['sr' => 'Knjižica troškova', 'en' => 'Budget Book'],
-    'sub' => ['sr' => 'prijava u ličnu evidenciju', 'en' => 'log in to your personal ledger'],
+    'sub' => ['sr' => 'unesi email za reset lozinke', 'en' => 'enter your email to reset your password'],
     'email' => ['sr' => 'Email', 'en' => 'Email'],
-    'password' => ['sr' => 'Lozinka', 'en' => 'Password'],
-    'submit' => ['sr' => 'Prijavi se', 'en' => 'Log in'],
-    'remember' => ['sr' => 'Zapamti me', 'en' => 'Remember me'],
-    'forgot_password' => ['sr' => 'Zaboravio si šifru?', 'en' => 'Forgot your password?'],
-    'no_account' => ['sr' => 'Nemaš nalog?', 'en' => "Don't have an account?"],
-    'register_link' => ['sr' => 'Registruj se', 'en' => 'Register'],
+    'submit' => ['sr' => 'Pošalji link za reset', 'en' => 'Send reset link'],
+    'back_to_login' => ['sr' => 'Nazad na prijavu', 'en' => 'Back to log in'],
 ];
 ?>
 <!DOCTYPE html>
@@ -77,16 +73,8 @@ $t = [
     cursor:pointer; letter-spacing:0.5px; margin-top:6px;
   }
   button:hover{ background:rgba(184,137,43,0.12); }
-  .remember-row{
-    display:flex; align-items:center; gap:6px; font-size:12px; text-transform:none;
-    letter-spacing:normal; font-variant:normal; color:var(--ink-light); cursor:pointer;
-    margin-bottom:0;
-  }
-  .remember-row input{ width:auto; margin:0; }
   .err{ color:var(--seal); font-size:12.5px; margin-bottom:14px; }
   .status{ color:var(--pos, #2E5B3E); font-size:12.5px; margin-bottom:14px; }
-  .forgot-link{ display:block; text-align:right; font-size:11.5px; margin:-10px 0 14px 0; }
-  .forgot-link a{ color:var(--ink-light); }
   .foot{ text-align:center; margin-top:18px; font-size:12px; }
   .foot a{ color:var(--ink); }
 </style>
@@ -106,20 +94,13 @@ $t = [
       <div class="status">{{ session('status') }}</div>
     @endif
 
-    <form method="POST" action="{{ route('login') }}">
+    <form method="POST" action="{{ route('password.email') }}">
       @csrf
       <label>{{ $t['email'][$lang] }}</label>
       <input type="email" name="email" value="{{ old('email') }}" required autofocus>
-      <label>{{ $t['password'][$lang] }}</label>
-      <input type="password" name="password" required>
-      <div class="forgot-link"><a href="{{ route('password.request') }}">{{ $t['forgot_password'][$lang] }}</a></div>
-      <label class="remember-row">
-        <input type="checkbox" name="remember" value="1">
-        {{ $t['remember'][$lang] }}
-      </label>
       <button type="submit">{{ $t['submit'][$lang] }}</button>
     </form>
-    <div class="foot">{{ $t['no_account'][$lang] }} <a href="{{ route('register') }}">{{ $t['register_link'][$lang] }}</a></div>
+    <div class="foot"><a href="{{ route('login') }}">{{ $t['back_to_login'][$lang] }}</a></div>
   </div>
   <script>
     if ('serviceWorker' in navigator) {

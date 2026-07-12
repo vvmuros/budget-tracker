@@ -9,11 +9,11 @@
 
       <div class="page">
         <div class="month-nav">
-          <button class="nav-btn" :disabled="fetching" @click="goPrev" aria-label="Prethodni mesec">
+          <button class="nav-btn" :disabled="fetching" @click="goPrev" :aria-label="t('prevMonth')">
             <svg viewBox="0 0 16 16" class="icon"><path d="M10 3 L5 8 L10 13" /></svg>
           </button>
           <span class="month-label">{{ currentPeriodLabel }}</span>
-          <button class="nav-btn" :disabled="fetching" @click="goNext" aria-label="Sledeći mesec">
+          <button class="nav-btn" :disabled="fetching" @click="goNext" :aria-label="t('nextMonth')">
             <svg viewBox="0 0 16 16" class="icon"><path d="M6 3 L11 8 L6 13" /></svg>
           </button>
         </div>
@@ -21,9 +21,10 @@
           <button class="reset-link icon-link" @click="toggleYearView">
             <svg v-if="!showYearView" viewBox="0 0 16 16" class="icon"><path d="M2 13 V8 M6 13 V4 M10 13 V6 M14 13 V2" /></svg>
             <svg v-else viewBox="0 0 16 16" class="icon"><path d="M9 3 L4 8 L9 13" /></svg>
-            {{ showYearView ? 'Nazad na mesec' : 'Analiza godine' }}
+            {{ showYearView ? t('backToMonth') : t('yearAnalysis') }}
           </button>
-          <button class="theme-toggle" @click="toggleTheme" aria-label="Promeni temu">
+          <a class="lang-link" :href="switchLangUrl(lang === 'en' ? 'sr' : 'en')">{{ lang === 'en' ? 'SR' : 'EN' }}</a>
+          <button class="theme-toggle" @click="toggleTheme" :aria-label="t('toggleTheme')">
             <svg v-if="isDark" viewBox="0 0 16 16" class="icon"><circle cx="8" cy="8" r="3" /><path d="M8 1.5 V3 M8 13 V14.5 M1.5 8 H3 M13 8 H14.5 M3.3 3.3 L4.4 4.4 M11.6 11.6 L12.7 12.7 M3.3 12.7 L4.4 11.6 M11.6 4.4 L12.7 3.3" /></svg>
             <svg v-else viewBox="0 0 16 16" class="icon"><path d="M13.5 9.8 A5.5 5.5 0 1 1 6.2 2.5 A4.3 4.3 0 0 0 13.5 9.8 Z" /></svg>
           </button>
@@ -34,46 +35,46 @@
             <div v-for="(msg, idx) in chatLog" :key="idx" class="chat-msg" :class="msg.role">
               <span>{{ msg.text }}</span>
               <div v-if="msg.confirm" class="chat-confirm">
-                <button class="add-row" @click="applyChatAction(msg)">Da</button>
-                <button class="reset-link" @click="rejectChatAction(msg)">Ne</button>
+                <button class="add-row" @click="applyChatAction(msg)">{{ t('yes') }}</button>
+                <button class="reset-link" @click="rejectChatAction(msg)">{{ t('no') }}</button>
               </div>
             </div>
           </div>
           <form class="chat-input" @submit.prevent="sendChatMessage">
-            <input type="text" v-model="chatInput" placeholder="npr. potrošio sam 500 na kafu" :disabled="chatSending || isListening">
+            <input type="text" v-model="chatInput" :placeholder="t('chatPlaceholder')" :disabled="chatSending || isListening">
             <button
               v-if="voiceSupported" type="button" class="mic-btn" :class="{ listening: isListening }"
-              :disabled="chatSending" @click="toggleVoiceInput" aria-label="Govorom unesi trošak"
+              :disabled="chatSending" @click="toggleVoiceInput" :aria-label="t('voiceLabel')"
             >
               <svg v-if="!isListening" viewBox="0 0 16 16" class="icon"><path d="M8 2.5 a2 2 0 0 1 2 2 v3.5 a2 2 0 0 1 -4 0 v-3.5 a2 2 0 0 1 2 -2 Z" /><path d="M4.5 8 a3.5 3.5 0 0 0 7 0 M8 11.5 V13.5 M6 13.5 H10" /></svg>
               <svg v-else viewBox="0 0 16 16" class="icon"><rect x="4" y="4" width="8" height="8" rx="1" /></svg>
             </button>
-            <button type="button" class="mic-btn" :disabled="chatSending || scanningReceipt" @click="triggerReceiptPicker" aria-label="Skeniraj račun">
+            <button type="button" class="mic-btn" :disabled="chatSending || scanningReceipt" @click="triggerReceiptPicker" :aria-label="t('receiptLabel')">
               <svg viewBox="0 0 16 16" class="icon"><path d="M2 6 a1 1 0 0 1 1 -1 h1.5 l1 -1.5 h5 l1 1.5 H13 a1 1 0 0 1 1 1 v6 a1 1 0 0 1 -1 1 H3 a1 1 0 0 1 -1 -1 Z" /><circle cx="8" cy="9" r="2.3" /></svg>
             </button>
             <input ref="receiptInputEl" type="file" accept="image/*" capture="environment" class="receipt-input" @change="onReceiptSelected">
-            <button type="submit" :disabled="chatSending || isListening || !chatInput.trim()">Pošalji</button>
+            <button type="submit" :disabled="chatSending || isListening || !chatInput.trim()">{{ t('send') }}</button>
           </form>
         </div>
 
         <div class="masthead">
-          <div class="eyebrow">Anno <span>{{ yearNow }}</span> · lična evidencija</div>
-          <h1>Knjižica troškova</h1>
-          <div class="sub">primanja, izdaci i štednja, po starom običaju</div>
+          <div class="eyebrow">Anno <span>{{ yearNow }}</span> · {{ t('annoTag') }}</div>
+          <h1>{{ t('title') }}</h1>
+          <div class="sub">{{ t('subtitle') }}</div>
           <svg class="flourish" viewBox="0 0 120 10"><path d="M0 5 H45 M75 5 H120 M55 5 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0" stroke="#B8892B" stroke-width="1" fill="none"/></svg>
         </div>
 
-        <div v-if="loading" class="foot-note">Učitavanje knjižice…</div>
+        <div v-if="loading" class="foot-note">{{ t('loadingBook') }}</div>
 
         <div v-else-if="showYearView" class="year-view">
-          <div class="section-title">Analiza {{ currentYearLabel }}</div>
+          <div class="section-title">{{ t('yearAnalysisHeading') }} {{ currentYearLabel }}</div>
 
-          <div v-if="yearLoading" class="foot-note">Učitavanje analize…</div>
+          <div v-if="yearLoading" class="foot-note">{{ t('loadingAnalysis') }}</div>
 
           <template v-else-if="yearMonths.length">
             <div class="year-legend">
-              <span class="legend-item"><span class="swatch" :style="{ background: YEAR_COLORS.income }"></span>Primanja</span>
-              <span class="legend-item"><span class="swatch" :style="{ background: YEAR_COLORS.expense }"></span>Troškovi</span>
+              <span class="legend-item"><span class="swatch" :style="{ background: YEAR_COLORS.income }"></span>{{ t('income') }}</span>
+              <span class="legend-item"><span class="swatch" :style="{ background: YEAR_COLORS.expense }"></span>{{ t('expenses') }}</span>
             </div>
 
             <svg class="year-chart" :viewBox="`0 0 ${yearChart.width} ${yearChart.height}`" preserveAspectRatio="xMidYMid meet">
@@ -88,12 +89,12 @@
                 v-for="(m, i) in yearMonths" :key="'inc'+i"
                 :cx="yearChart.x(i)" :cy="yearChart.y(m.income)" r="4"
                 :fill="YEAR_COLORS.income" stroke="var(--parchment)" stroke-width="2"
-              ><title>{{ periodLabel(m.period) }} — primanja: {{ fmt(m.income) }} RSD</title></circle>
+              ><title>{{ periodLabel(m.period) }} — {{ t('income') }}: {{ fmt(m.income) }} RSD</title></circle>
               <circle
                 v-for="(m, i) in yearMonths" :key="'exp'+i"
                 :cx="yearChart.x(i)" :cy="yearChart.y(m.expense)" r="4"
                 :fill="YEAR_COLORS.expense" stroke="var(--parchment)" stroke-width="2"
-              ><title>{{ periodLabel(m.period) }} — troškovi: {{ fmt(m.expense) }} RSD</title></circle>
+              ><title>{{ periodLabel(m.period) }} — {{ t('expenses') }}: {{ fmt(m.expense) }} RSD</title></circle>
               <text
                 v-for="(m, i) in yearMonths" :key="'lbl'+i"
                 :x="yearChart.x(i)" :y="yearChart.height - 8" class="year-axis-label" text-anchor="middle"
@@ -101,7 +102,7 @@
             </svg>
 
             <table class="year-table">
-              <thead><tr><th>Mesec</th><th>Primanja</th><th>Troškovi</th><th>Neto</th></tr></thead>
+              <thead><tr><th>{{ t('month') }}</th><th>{{ t('income') }}</th><th>{{ t('expenses') }}</th><th>{{ t('net') }}</th></tr></thead>
               <tbody>
                 <tr v-for="m in yearMonths" :key="m.period">
                   <td>{{ periodLabel(m.period) }}</td>
@@ -113,73 +114,73 @@
             </table>
           </template>
 
-          <div v-else class="foot-note">Nema još podataka za analizu ove godine.</div>
+          <div v-else class="foot-note">{{ t('noYearData') }}</div>
         </div>
 
         <Transition v-else :name="navDirection === 'next' ? 'page-next' : 'page-prev'" mode="out-in">
           <div :key="currentPeriod" class="month-content" :class="{ 'is-fetching': fetching }">
 
             <div v-if="bannerVisible" class="banner">
-              <span>Iz {{ bannerPreviousLabel }} ti je ostalo <strong>{{ signed(bannerPreviousNet) }} RSD</strong> (neto). Dodati u štednju?</span>
+              <span>{{ bannerPrefix(bannerPreviousLabel) }}<strong>{{ signed(bannerPreviousNet) }} RSD</strong>{{ bannerSuffix(bannerPreviousLabel) }}</span>
               <div class="banner-actions">
                 <input type="number" v-model.number="bannerAmount" step="1">
-                <button class="add-row" @click="confirmBanner">Dodaj u štednju</button>
-                <button class="reset-link" @click="dismissBanner">Ne, hvala</button>
+                <button class="add-row" @click="confirmBanner">{{ t('addToSavings') }}</button>
+                <button class="reset-link" @click="dismissBanner">{{ t('noThanks') }}</button>
               </div>
             </div>
 
-            <div class="section-title">Primanja</div>
+            <div class="section-title">{{ t('income') }}</div>
             <table>
               <thead>
                 <tr>
-                  <th style="width:auto">Stavka</th>
-                  <th class="amt-col">Iznos</th>
-                  <th class="cur-col">Valuta</th>
-                  <th class="freq-col">Učestalost</th>
-                  <th class="chk-col">Akt.</th>
+                  <th style="width:auto">{{ t('item') }}</th>
+                  <th class="amt-col">{{ t('amount') }}</th>
+                  <th class="cur-col">{{ t('currency') }}</th>
+                  <th class="freq-col">{{ t('frequency') }}</th>
+                  <th class="chk-col">{{ t('active') }}</th>
                   <th class="del-col"></th>
                 </tr>
               </thead>
               <TransitionGroup tag="tbody" name="row">
                 <tr v-for="item in visibleIncome" :key="keyFor(item)" :class="{ inactive: !item.active }">
                   <td class="cell-name"><input type="text" v-model="item.name" :title="item.name" @change="saveIncome"></td>
-                  <td class="amt-col" data-label="Iznos"><input type="number" v-model.number="item.amount" step="1" @change="saveIncome"></td>
-                  <td class="cur-col" data-label="Valuta">
+                  <td class="amt-col" :data-label="t('amount')"><input type="number" v-model.number="item.amount" step="1" @change="saveIncome"></td>
+                  <td class="cur-col" :data-label="t('currency')">
                     <select v-model="item.currency" @change="saveIncome">
                       <option value="RSD">RSD</option>
                       <option value="EUR">EUR</option>
                       <option value="USD">USD</option>
                     </select>
                   </td>
-                  <td class="freq-col" data-label="Učestalost">
+                  <td class="freq-col" :data-label="t('frequency')">
                     <select v-model.number="item.freq" @change="saveIncome">
-                      <option :value="1">mesečno</option>
-                      <option :value="2">na 2 meseca</option>
-                      <option :value="3">na 3 meseca</option>
-                      <option :value="0">jednokratno</option>
+                      <option :value="1">{{ t('monthly') }}</option>
+                      <option :value="2">{{ t('every2Months') }}</option>
+                      <option :value="3">{{ t('every3Months') }}</option>
+                      <option :value="0">{{ t('oneTime') }}</option>
                     </select>
                   </td>
-                  <td class="chk-col" data-label="Aktivno"><input type="checkbox" v-model="item.active" @change="saveIncome"></td>
-                  <td class="del-col"><button class="del-btn" @click="removeRow(income, item, saveIncome)" aria-label="Obriši red"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
+                  <td class="chk-col" :data-label="t('active')"><input type="checkbox" v-model="item.active" @change="saveIncome"></td>
+                  <td class="del-col"><button class="del-btn" @click="removeRow(income, item, saveIncome)" :aria-label="t('deleteRow')"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
                 </tr>
               </TransitionGroup>
             </table>
-            <button class="add-row" @click="addRow(income, 'Novo primanje', saveIncome)"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> upiši primanje</button>
+            <button class="add-row" @click="addRow(income, t('newIncomeName'), saveIncome)"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addIncome') }}</button>
             <button v-if="oneTimeIncomeCount > 0" class="reset-link load-more-btn" @click="showOneTimeIncome = !showOneTimeIncome">
-              {{ showOneTimeIncome ? 'Sakrij jednokratna primanja' : 'Prikaži jednokratna primanja' }} ({{ oneTimeIncomeCount }})
+              {{ showOneTimeIncome ? t('hideOneTimeIncome') : t('showOneTimeIncome') }} ({{ oneTimeIncomeCount }})
             </button>
 
-            <div class="section-title">Troškovi</div>
+            <div class="section-title">{{ t('expenses') }}</div>
             <table>
               <thead>
                 <tr>
-                  <th style="width:auto">Stavka</th>
-                  <th class="amt-col">Iznos</th>
-                  <th class="cur-col">Valuta</th>
-                  <th class="freq-col">Učestalost</th>
-                  <th class="end-col">Do meseca</th>
-                  <th class="cat-col">Kategorija</th>
-                  <th class="chk-col">Akt.</th>
+                  <th style="width:auto">{{ t('item') }}</th>
+                  <th class="amt-col">{{ t('amount') }}</th>
+                  <th class="cur-col">{{ t('currency') }}</th>
+                  <th class="freq-col">{{ t('frequency') }}</th>
+                  <th class="end-col">{{ t('untilMonth') }}</th>
+                  <th class="cat-col">{{ t('category') }}</th>
+                  <th class="chk-col">{{ t('active') }}</th>
                   <th class="del-col"></th>
                 </tr>
               </thead>
@@ -189,41 +190,41 @@
                     <span class="cat-dot" :style="{ background: categoryColor(item.category, EXPENSE_CATEGORIES) }"></span>
                     <input type="text" v-model="item.name" :title="item.name" @change="saveExpenses">
                   </td>
-                  <td class="amt-col" data-label="Iznos"><input type="number" v-model.number="item.amount" step="1" @change="saveExpenses"></td>
-                  <td class="cur-col" data-label="Valuta">
+                  <td class="amt-col" :data-label="t('amount')"><input type="number" v-model.number="item.amount" step="1" @change="saveExpenses"></td>
+                  <td class="cur-col" :data-label="t('currency')">
                     <select v-model="item.currency" @change="saveExpenses">
                       <option value="RSD">RSD</option>
                       <option value="EUR">EUR</option>
                       <option value="USD">USD</option>
                     </select>
                   </td>
-                  <td class="freq-col" data-label="Učestalost">
+                  <td class="freq-col" :data-label="t('frequency')">
                     <select v-model.number="item.freq" @change="saveExpenses">
-                      <option :value="1">mesečno</option>
-                      <option :value="2">na 2 meseca</option>
-                      <option :value="3">na 3 meseca</option>
-                      <option :value="0">jednokratno</option>
+                      <option :value="1">{{ t('monthly') }}</option>
+                      <option :value="2">{{ t('every2Months') }}</option>
+                      <option :value="3">{{ t('every3Months') }}</option>
+                      <option :value="0">{{ t('oneTime') }}</option>
                     </select>
                   </td>
-                  <td class="end-col" data-label="Do meseca"><input type="month" v-model="item.endPeriod" @change="saveExpenses"></td>
-                  <td class="cat-col" data-label="Kategorija">
+                  <td class="end-col" :data-label="t('untilMonth')"><input type="month" v-model="item.endPeriod" @change="saveExpenses"></td>
+                  <td class="cat-col" :data-label="t('category')">
                     <select v-model="item.category" @change="saveExpenses">
-                      <option v-for="cat in EXPENSE_CATEGORIES" :key="cat" :value="cat">{{ cat }}</option>
+                      <option v-for="cat in EXPENSE_CATEGORIES" :key="cat" :value="cat">{{ categoryLabel(cat) }}</option>
                     </select>
                   </td>
-                  <td class="chk-col" data-label="Aktivno"><input type="checkbox" v-model="item.active" @change="saveExpenses"></td>
-                  <td class="del-col"><button class="del-btn" @click="removeRow(expenses, item, saveExpenses)" aria-label="Obriši red"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
+                  <td class="chk-col" :data-label="t('active')"><input type="checkbox" v-model="item.active" @change="saveExpenses"></td>
+                  <td class="del-col"><button class="del-btn" @click="removeRow(expenses, item, saveExpenses)" :aria-label="t('deleteRow')"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
                 </tr>
               </TransitionGroup>
             </table>
-            <button class="add-row" @click="addRow(expenses, 'Nova stavka', saveExpenses)"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> upiši trošak</button>
+            <button class="add-row" @click="addRow(expenses, t('newExpenseName'), saveExpenses)"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addExpense') }}</button>
             <button v-if="oneTimeExpensesCount > 0" class="reset-link load-more-btn" @click="showOneTimeExpenses = !showOneTimeExpenses">
-              {{ showOneTimeExpenses ? 'Sakrij jednokratne troškove' : 'Prikaži jednokratne troškove' }} ({{ oneTimeExpensesCount }})
+              {{ showOneTimeExpenses ? t('hideOneTimeExpenses') : t('showOneTimeExpenses') }} ({{ oneTimeExpensesCount }})
             </button>
 
             <div class="chart-section" v-if="categoryBreakdown.length">
               <div class="cat-bar-row" v-for="slice in categoryBreakdown" :key="slice.category">
-                <div class="cat-bar-label">{{ slice.category }}</div>
+                <div class="cat-bar-label">{{ categoryLabel(slice.category) }}</div>
                 <div class="cat-bar-track">
                   <div class="cat-bar-fill" :style="{ width: slice.pct + '%', background: slice.color }"></div>
                 </div>
@@ -231,14 +232,14 @@
               </div>
             </div>
 
-            <div class="section-title">Štednja i imovina</div>
+            <div class="section-title">{{ t('savingsAndAssets') }}</div>
             <table>
               <thead>
                 <tr>
-                  <th style="width:auto">Stavka</th>
-                  <th class="amt-col">Iznos</th>
-                  <th class="cur-col">Valuta</th>
-                  <th class="cat-col">Kategorija</th>
+                  <th style="width:auto">{{ t('item') }}</th>
+                  <th class="amt-col">{{ t('amount') }}</th>
+                  <th class="cur-col">{{ t('currency') }}</th>
+                  <th class="cat-col">{{ t('category') }}</th>
                   <th class="del-col"></th>
                 </tr>
               </thead>
@@ -248,45 +249,45 @@
                     <span class="cat-dot" :style="{ background: categoryColor(item.category, SAVINGS_CATEGORIES) }"></span>
                     <input type="text" v-model="item.name" :title="item.name" @change="saveSavings">
                   </td>
-                  <td class="amt-col" data-label="Iznos"><input type="number" v-model.number="item.amount" step="1" @change="saveSavings"></td>
-                  <td class="cur-col" data-label="Valuta">
+                  <td class="amt-col" :data-label="t('amount')"><input type="number" v-model.number="item.amount" step="1" @change="saveSavings"></td>
+                  <td class="cur-col" :data-label="t('currency')">
                     <select v-model="item.currency" @change="saveSavings">
                       <option value="RSD">RSD</option>
                       <option value="EUR">EUR</option>
                       <option value="USD">USD</option>
                     </select>
                   </td>
-                  <td class="cat-col" data-label="Kategorija">
+                  <td class="cat-col" :data-label="t('category')">
                     <select v-model="item.category" @change="saveSavings">
-                      <option v-for="cat in SAVINGS_CATEGORIES" :key="cat" :value="cat">{{ cat }}</option>
+                      <option v-for="cat in SAVINGS_CATEGORIES" :key="cat" :value="cat">{{ categoryLabel(cat) }}</option>
                     </select>
                   </td>
-                  <td class="del-col"><button class="del-btn" @click="removeRow(savings, item, saveSavings)" aria-label="Obriši red"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
+                  <td class="del-col"><button class="del-btn" @click="removeRow(savings, item, saveSavings)" :aria-label="t('deleteRow')"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
                 </tr>
               </TransitionGroup>
             </table>
-            <button class="add-row" @click="addSavingsRow"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> upiši stavku štednje</button>
+            <button class="add-row" @click="addSavingsRow"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addSaving') }}</button>
 
             <div class="rates">
               <div>
-                <label>1 USD =</label>
+                <label>{{ t('usdRate') }}</label>
                 <input type="number" v-model.number="rates.usd" step="0.01" @change="saveRates">
               </div>
               <div>
-                <label>1 EUR =</label>
+                <label>{{ t('eurRate') }}</label>
                 <input type="number" v-model.number="rates.eur" step="0.01" @change="saveRates">
               </div>
-              <div class="note">srednji kurs NBS, po volji izmeni</div>
+              <div class="note">{{ t('rateNote') }}</div>
             </div>
 
-            <div class="section-title">Konverter valuta</div>
+            <div class="section-title">{{ t('currencyConverter') }}</div>
             <div class="converter">
               <div>
-                <label>Iznos</label>
+                <label>{{ t('amount') }}</label>
                 <input type="number" v-model.number="conv.amount" step="1">
               </div>
               <div>
-                <label>Iz</label>
+                <label>{{ t('fromLabel') }}</label>
                 <select v-model="conv.from">
                   <option value="RSD">RSD</option>
                   <option value="EUR">EUR</option>
@@ -295,7 +296,7 @@
               </div>
               <div class="eq">=</div>
               <div>
-                <label>U</label>
+                <label>{{ t('toLabel') }}</label>
                 <select v-model="conv.to">
                   <option value="EUR">EUR</option>
                   <option value="RSD">RSD</option>
@@ -307,41 +308,41 @@
 
             <div class="totals">
               <div class="totals-text">
-                <div class="row"><span class="lbl">primanja ovog meseca</span><span class="val" :class="{ flash: flash.income }">{{ fmt(incThis) }} RSD</span></div>
-                <div class="row"><span class="lbl">troškovi ovog meseca</span><span class="val" :class="{ flash: flash.expense }">{{ fmt(expThis) }} RSD</span></div>
-                <div class="row main"><span class="lbl">neto ovog meseca</span><span class="val" :class="[netThis >= 0 ? 'pos' : 'neg', { flash: flash.net }]">{{ signed(netThis) }} RSD</span></div>
-                <div class="row"><span class="lbl">prosečan neto mesečno</span><span class="val" :class="netAvg >= 0 ? 'pos' : 'neg'">{{ signed(netAvg) }} RSD</span></div>
+                <div class="row"><span class="lbl">{{ t('incomeThisMonth') }}</span><span class="val" :class="{ flash: flash.income }">{{ fmt(incThis) }} RSD</span></div>
+                <div class="row"><span class="lbl">{{ t('expensesThisMonth') }}</span><span class="val" :class="{ flash: flash.expense }">{{ fmt(expThis) }} RSD</span></div>
+                <div class="row main"><span class="lbl">{{ t('netThisMonth') }}</span><span class="val" :class="[netThis >= 0 ? 'pos' : 'neg', { flash: flash.net }]">{{ signed(netThis) }} RSD</span></div>
+                <div class="row"><span class="lbl">{{ t('avgNetMonthly') }}</span><span class="val" :class="netAvg >= 0 ? 'pos' : 'neg'">{{ signed(netAvg) }} RSD</span></div>
               </div>
               <div class="seal-wrap">
-                <div class="lbl">neto</div>
+                <div class="lbl">{{ t('netLower') }}</div>
                 <div class="val" :class="{ flash: flash.net }">{{ signed(netThis) }}</div>
-                <div class="cur">RSD ovog meseca</div>
+                <div class="cur">{{ t('rsdThisMonth') }}</div>
               </div>
             </div>
 
             <div class="analyze-row">
               <button class="add-row" :disabled="analyzing" @click="analyzeMonth">
                 <svg viewBox="0 0 16 16" class="icon"><circle cx="7" cy="7" r="4.5" /><path d="M10.2 10.2 L14 14" /></svg>
-                {{ analyzing ? 'Analiziram…' : 'Analiziraj mesec' }}
+                {{ analyzing ? t('analyzing') : t('analyzeMonth') }}
               </button>
             </div>
             <div v-if="analysisText || analysisError" class="banner">
               <span v-if="analysisText">{{ analysisText }}</span>
               <span v-else>{{ analysisError }}</span>
               <div class="banner-actions">
-                <button class="reset-link" @click="closeAnalysis">Zatvori</button>
+                <button class="reset-link" @click="closeAnalysis">{{ t('close') }}</button>
               </div>
             </div>
 
             <div class="savings-line">
-              Ukupna ušteđevina: <strong :class="{ flash: flash.savings }">{{ fmt(savTotal) }} RSD</strong>
+              {{ t('totalSavings') }} <strong :class="{ flash: flash.savings }">{{ fmt(savTotal) }} RSD</strong>
               &nbsp;·&nbsp; <span>≈ {{ fmt2(savTotal / rates.eur) }} €</span>
               &nbsp;·&nbsp; <span>≈ {{ fmt2(savTotal / rates.usd) }} $</span>
             </div>
 
             <div class="foot-note">
-              Isključi "Akt." za stavke koje ovog meseca ne dospevaju.
-              &nbsp;·&nbsp; <button class="reset-link" @click="resetAll">vrati na početne vrednosti</button>
+              {{ t('footNote') }}
+              &nbsp;·&nbsp; <button class="reset-link" @click="resetAll">{{ t('resetDefaults') }}</button>
             </div>
           </div>
         </Transition>
@@ -358,7 +359,213 @@ const yearNow = new Date().getFullYear();
 const loading = ref(true);
 const fetching = ref(false);
 
-const MONTH_NAMES = ['Januar', 'Februar', 'Mart', 'April', 'Maj', 'Jun', 'Jul', 'Avgust', 'Septembar', 'Oktobar', 'Novembar', 'Decembar'];
+function readLangCookie() {
+  const match = document.cookie.match(/(?:^|; )lang=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : 'sr';
+}
+const lang = ref(readLangCookie());
+
+const TRANSLATIONS = {
+  sr: {
+    prevMonth: 'Prethodni mesec',
+    nextMonth: 'Sledeći mesec',
+    yearAnalysis: 'Analiza godine',
+    backToMonth: 'Nazad na mesec',
+    toggleTheme: 'Promeni temu',
+    chatPlaceholder: 'npr. potrošio sam 500 na kafu',
+    voiceLabel: 'Govorom unesi trošak',
+    receiptLabel: 'Skeniraj račun',
+    send: 'Pošalji',
+    yes: 'Da',
+    no: 'Ne',
+    annoTag: 'lična evidencija',
+    title: 'Knjižica troškova',
+    subtitle: 'primanja, izdaci i štednja, po starom običaju',
+    loadingBook: 'Učitavanje knjižice…',
+    yearAnalysisHeading: 'Analiza',
+    loadingAnalysis: 'Učitavanje analize…',
+    income: 'Primanja',
+    expenses: 'Troškovi',
+    savingsAndAssets: 'Štednja i imovina',
+    month: 'Mesec',
+    net: 'Neto',
+    noYearData: 'Nema još podataka za analizu ove godine.',
+    addToSavings: 'Dodaj u štednju',
+    noThanks: 'Ne, hvala',
+    item: 'Stavka',
+    amount: 'Iznos',
+    currency: 'Valuta',
+    frequency: 'Učestalost',
+    untilMonth: 'Do meseca',
+    category: 'Kategorija',
+    active: 'Akt.',
+    monthly: 'mesečno',
+    every2Months: 'na 2 meseca',
+    every3Months: 'na 3 meseca',
+    oneTime: 'jednokratno',
+    deleteRow: 'Obriši red',
+    addIncome: 'upiši primanje',
+    addExpense: 'upiši trošak',
+    addSaving: 'upiši stavku štednje',
+    hideOneTimeIncome: 'Sakrij jednokratna primanja',
+    showOneTimeIncome: 'Prikaži jednokratna primanja',
+    hideOneTimeExpenses: 'Sakrij jednokratne troškove',
+    showOneTimeExpenses: 'Prikaži jednokratne troškove',
+    usdRate: '1 USD =',
+    eurRate: '1 EUR =',
+    rateNote: 'srednji kurs NBS, po volji izmeni',
+    currencyConverter: 'Konverter valuta',
+    fromLabel: 'Iz',
+    toLabel: 'U',
+    incomeThisMonth: 'primanja ovog meseca',
+    expensesThisMonth: 'troškovi ovog meseca',
+    netThisMonth: 'neto ovog meseca',
+    avgNetMonthly: 'prosečan neto mesečno',
+    netLower: 'neto',
+    rsdThisMonth: 'RSD ovog meseca',
+    analyzing: 'Analiziram…',
+    analyzeMonth: 'Analiziraj mesec',
+    close: 'Zatvori',
+    totalSavings: 'Ukupna ušteđevina:',
+    footNote: 'Isključi "Akt." za stavke koje ovog meseca ne dospevaju.',
+    resetDefaults: 'vrati na početne vrednosti',
+    newIncomeName: 'Novo primanje',
+    newExpenseName: 'Nova stavka',
+    newSavingName: 'Nova stavka',
+    transferredFrom: 'Preneto iz ',
+    thinking: 'Razmišljam…',
+    unclear: 'Nisam siguran šta si mislio/la — probaj konkretnije (npr. "potrošio sam 500 dinara na kafu").',
+    chatError: 'Nešto nije u redu, probaj ponovo.',
+    added: '✓ Dodato.',
+    rejected: 'U redu, ništa nisam dodao.',
+    receiptSent: '📷 Poslata slika računa',
+    readingReceipt: 'Čitam račun…',
+    receiptUnclear: 'Nisam uspeo da pročitam račun sa slike — probaj jasniju fotografiju ili ukucaj ručno.',
+    receiptError: 'Nešto nije u redu sa slikom, probaj ponovo.',
+    imageLoadError: 'Neuspešno učitavanje slike.',
+    analysisUnavailable: 'Analiza trenutno nije dostupna.',
+    voiceNoMatch: 'Nisam razumeo šta si rekao/la — probaj ponovo, sporije i jasnije.',
+    voiceNotAllowed: 'Nisam dobio dozvolu za mikrofon — proveri podešavanja browsera/telefona.',
+    voiceAudioCapture: 'Ne mogu da pristupim mikrofonu na ovom uređaju.',
+    voiceNetwork: 'Problem sa mrežom tokom prepoznavanja govora — probaj ponovo.',
+    voiceLangNotSupported: 'Srpski jezik nije podržan za prepoznavanje govora na ovom uređaju.',
+    voiceGenericError: (code) => `Nisam uspeo da prepoznam govor (${code}) — probaj ponovo ili ukucaj ručno.`,
+    chatActionExpense: 'trošak',
+    chatActionIncome: 'primanje',
+    chatActionSaving: 'stavku štednje',
+    confirmAddPrefix: 'Da dodam',
+    categoryWord: 'kategorija',
+  },
+  en: {
+    prevMonth: 'Previous month',
+    nextMonth: 'Next month',
+    yearAnalysis: 'Yearly analysis',
+    backToMonth: 'Back to month',
+    toggleTheme: 'Toggle theme',
+    chatPlaceholder: 'e.g. spent 500 on coffee',
+    voiceLabel: 'Add an expense by voice',
+    receiptLabel: 'Scan a receipt',
+    send: 'Send',
+    yes: 'Yes',
+    no: 'No',
+    annoTag: 'personal ledger',
+    title: 'Budget Book',
+    subtitle: 'income, expenses and savings, the old-fashioned way',
+    loadingBook: 'Loading the book…',
+    yearAnalysisHeading: 'Analysis',
+    loadingAnalysis: 'Loading analysis…',
+    income: 'Income',
+    expenses: 'Expenses',
+    savingsAndAssets: 'Savings & Assets',
+    month: 'Month',
+    net: 'Net',
+    noYearData: 'No data yet to analyze this year.',
+    addToSavings: 'Add to savings',
+    noThanks: 'No thanks',
+    item: 'Item',
+    amount: 'Amount',
+    currency: 'Currency',
+    frequency: 'Frequency',
+    untilMonth: 'Until month',
+    category: 'Category',
+    active: 'Active',
+    monthly: 'monthly',
+    every2Months: 'every 2 months',
+    every3Months: 'every 3 months',
+    oneTime: 'one-time',
+    deleteRow: 'Delete row',
+    addIncome: 'add income',
+    addExpense: 'add expense',
+    addSaving: 'add savings item',
+    hideOneTimeIncome: 'Hide one-time income',
+    showOneTimeIncome: 'Show one-time income',
+    hideOneTimeExpenses: 'Hide one-time expenses',
+    showOneTimeExpenses: 'Show one-time expenses',
+    usdRate: '1 USD =',
+    eurRate: '1 EUR =',
+    rateNote: 'NBS mid rate, adjust as you like',
+    currencyConverter: 'Currency converter',
+    fromLabel: 'From',
+    toLabel: 'To',
+    incomeThisMonth: 'income this month',
+    expensesThisMonth: 'expenses this month',
+    netThisMonth: 'net this month',
+    avgNetMonthly: 'average monthly net',
+    netLower: 'net',
+    rsdThisMonth: 'RSD this month',
+    analyzing: 'Analyzing…',
+    analyzeMonth: 'Analyze month',
+    close: 'Close',
+    totalSavings: 'Total savings:',
+    footNote: 'Turn off "Active" for items not due this month.',
+    resetDefaults: 'reset to defaults',
+    newIncomeName: 'New income',
+    newExpenseName: 'New item',
+    newSavingName: 'New item',
+    transferredFrom: 'Transferred from ',
+    thinking: 'Thinking…',
+    unclear: 'Not sure what you meant — try being more specific (e.g. "spent 500 dinars on coffee").',
+    chatError: 'Something went wrong, try again.',
+    added: '✓ Added.',
+    rejected: "OK, I didn't add anything.",
+    receiptSent: '📷 Receipt photo sent',
+    readingReceipt: 'Reading the receipt…',
+    receiptUnclear: "Couldn't read the receipt from the photo — try a clearer picture or type it manually.",
+    receiptError: 'Something went wrong with the image, try again.',
+    imageLoadError: 'Failed to load the image.',
+    analysisUnavailable: 'Analysis is currently unavailable.',
+    voiceNoMatch: "Didn't catch that — try again, slower and clearer.",
+    voiceNotAllowed: 'Microphone permission denied — check your browser/phone settings.',
+    voiceAudioCapture: "Can't access the microphone on this device.",
+    voiceNetwork: 'Network problem during speech recognition — try again.',
+    voiceLangNotSupported: 'Speech recognition for this language is not supported on this device.',
+    voiceGenericError: (code) => `Couldn't recognize speech (${code}) — try again or type it manually.`,
+    chatActionExpense: 'expense',
+    chatActionIncome: 'income',
+    chatActionSaving: 'savings item',
+    confirmAddPrefix: 'Add',
+    categoryWord: 'category',
+  },
+};
+
+function t(key) {
+  return TRANSLATIONS[lang.value]?.[key] ?? key;
+}
+
+const MONTH_NAMES_BY_LANG = {
+  sr: ['Januar', 'Februar', 'Mart', 'April', 'Maj', 'Jun', 'Jul', 'Avgust', 'Septembar', 'Oktobar', 'Novembar', 'Decembar'],
+  en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+};
+const MONTH_NAMES = computed(() => MONTH_NAMES_BY_LANG[lang.value]);
+
+const CATEGORY_LABELS_EN = {
+  Stanovanje: 'Housing', Hrana: 'Food', Prevoz: 'Transport', Zdravlje: 'Health',
+  Zabava: 'Entertainment', Računi: 'Bills', Otplate: 'Debt payments', Ostalo: 'Other',
+  Gotovina: 'Cash', Štednja: 'Savings', Investicije: 'Investments', Nekretnine: 'Real estate',
+};
+function categoryLabel(cat) {
+  return lang.value === 'en' ? (CATEGORY_LABELS_EN[cat] ?? cat) : cat;
+}
 
 function currentYearMonth() {
   const d = new Date();
@@ -371,7 +578,8 @@ function shiftPeriod(period, delta) {
 }
 function periodLabel(period) {
   const [y, m] = period.split('-').map(Number);
-  return MONTH_NAMES[m - 1] + ' ' + y + '.';
+  const name = MONTH_NAMES.value[m - 1];
+  return lang.value === 'en' ? `${name} ${y}` : `${name} ${y}.`;
 }
 
 const currentPeriod = ref(currentYearMonth());
@@ -450,7 +658,7 @@ async function loadState(period) {
 }
 
 function confirmBanner() {
-  savings.push({ name: 'Preneto iz ' + bannerPreviousLabel.value, amount: Math.round(bannerAmount.value) || 0, currency: 'RSD', category: 'Štednja' });
+  savings.push({ name: t('transferredFrom') + bannerPreviousLabel.value, amount: Math.round(bannerAmount.value) || 0, currency: 'RSD', category: 'Štednja' });
   saveSavings();
   bannerVisible.value = false;
   dismissedPeriods.add(currentPeriod.value);
@@ -475,7 +683,7 @@ function addRow(arr, name, save) {
   save();
 }
 function addSavingsRow() {
-  savings.push({ name: 'Nova stavka', amount: 0, currency: 'RSD', category: 'Ostalo' });
+  savings.push({ name: t('newSavingName'), amount: 0, currency: 'RSD', category: 'Ostalo' });
   saveSavings();
 }
 function removeRow(arr, item, save) {
@@ -591,8 +799,14 @@ const chatInput = ref('');
 const chatSending = ref(false);
 const chatLogEl = ref(null);
 
-const CHAT_ACTION_LABELS = { add_expense: 'trošak', add_income: 'primanje', add_saving: 'stavku štednje' };
-const FREQ_LABELS = { 0: 'jednokratno', 1: 'mesečno', 2: 'na 2 meseca', 3: 'na 3 meseca' };
+const CHAT_ACTION_LABELS = computed(() => ({
+  add_expense: t('chatActionExpense'),
+  add_income: t('chatActionIncome'),
+  add_saving: t('chatActionSaving'),
+}));
+const FREQ_LABELS = computed(() => ({
+  0: t('oneTime'), 1: t('monthly'), 2: t('every2Months'), 3: t('every3Months'),
+}));
 
 function scrollChatToBottom() {
   nextTick(() => {
@@ -614,31 +828,31 @@ function toggleVoiceInput() {
   }
 
   recognition = new SpeechRecognitionCtor();
-  recognition.lang = 'sr-RS';
+  recognition.lang = lang.value === 'en' ? 'en-US' : 'sr-RS';
   recognition.interimResults = false;
   recognition.maxAlternatives = 1;
 
   const VOICE_ERROR_MESSAGES = {
-    'not-allowed': 'Nisam dobio dozvolu za mikrofon — proveri podešavanja browsera/telefona.',
-    'service-not-allowed': 'Nisam dobio dozvolu za mikrofon — proveri podešavanja browsera/telefona.',
-    'audio-capture': 'Ne mogu da pristupim mikrofonu na ovom uređaju.',
-    'network': 'Problem sa mrežom tokom prepoznavanja govora — probaj ponovo.',
-    'language-not-supported': 'Srpski jezik nije podržan za prepoznavanje govora na ovom uređaju.',
+    'not-allowed': t('voiceNotAllowed'),
+    'service-not-allowed': t('voiceNotAllowed'),
+    'audio-capture': t('voiceAudioCapture'),
+    'network': t('voiceNetwork'),
+    'language-not-supported': t('voiceLangNotSupported'),
   };
 
   recognition.onstart = () => { isListening.value = true; };
   recognition.onend = () => { isListening.value = false; };
   recognition.onnomatch = () => {
-    chatLog.push({ role: 'assistant', text: 'Nisam razumeo šta si rekao/la — probaj ponovo, sporije i jasnije.' });
+    chatLog.push({ role: 'assistant', text: t('voiceNoMatch') });
     scrollChatToBottom();
   };
   recognition.onerror = (event) => {
     isListening.value = false;
-    console.error('SpeechRecognition greška:', event.error);
+    console.error('SpeechRecognition error:', event.error);
     if (event.error === 'no-speech' || event.error === 'aborted') return;
     chatLog.push({
       role: 'assistant',
-      text: VOICE_ERROR_MESSAGES[event.error] || `Nisam uspeo da prepoznam govor (${event.error}) — probaj ponovo ili ukucaj ručno.`,
+      text: VOICE_ERROR_MESSAGES[event.error] || TRANSLATIONS[lang.value].voiceGenericError(event.error),
     });
     scrollChatToBottom();
   };
@@ -657,7 +871,7 @@ async function sendChatMessage() {
   chatLog.push({ role: 'user', text });
   chatInput.value = '';
   chatSending.value = true;
-  chatLog.push({ role: 'assistant', text: 'Razmišljam…' });
+  chatLog.push({ role: 'assistant', text: t('thinking') });
   scrollChatToBottom();
 
   try {
@@ -673,19 +887,19 @@ async function sendChatMessage() {
       const currency = data.currency || 'RSD';
       const freq = data.freq ?? 1;
       const category = data.category || 'Ostalo';
-      const freqText = data.action === 'add_saving' ? '' : `, ${FREQ_LABELS[freq] ?? 'mesečno'}`;
-      const catText = data.action === 'add_income' ? '' : `, kategorija ${category}`;
+      const freqText = data.action === 'add_saving' ? '' : `, ${FREQ_LABELS.value[freq] ?? t('monthly')}`;
+      const catText = data.action === 'add_income' ? '' : `, ${t('categoryWord')} ${categoryLabel(category)}`;
       chatLog.push({
         role: 'assistant',
-        text: `Da dodam ${CHAT_ACTION_LABELS[data.action]} "${data.name}": ${data.amount} ${currency}${freqText}${catText}?`,
+        text: `${t('confirmAddPrefix')} ${CHAT_ACTION_LABELS.value[data.action]} "${data.name}": ${data.amount} ${currency}${freqText}${catText}?`,
         confirm: { action: data.action, name: data.name, amount: data.amount, currency, freq, category },
       });
     } else {
-      chatLog.push({ role: 'assistant', text: 'Nisam siguran šta si mislio/la — probaj konkretnije (npr. "potrošio sam 500 dinara na kafu").' });
+      chatLog.push({ role: 'assistant', text: t('unclear') });
     }
   } catch (e) {
     chatLog.pop();
-    chatLog.push({ role: 'assistant', text: 'Nešto nije u redu, probaj ponovo.' });
+    chatLog.push({ role: 'assistant', text: t('chatError') });
   } finally {
     chatSending.value = false;
     scrollChatToBottom();
@@ -705,13 +919,13 @@ function applyChatAction(msg) {
     saveSavings();
   }
   msg.confirm = null;
-  chatLog.push({ role: 'assistant', text: '✓ Dodato.' });
+  chatLog.push({ role: 'assistant', text: t('added') });
   scrollChatToBottom();
 }
 
 function rejectChatAction(msg) {
   msg.confirm = null;
-  chatLog.push({ role: 'assistant', text: 'U redu, ništa nisam dodao.' });
+  chatLog.push({ role: 'assistant', text: t('rejected') });
   scrollChatToBottom();
 }
 
@@ -749,7 +963,7 @@ function compressImageFile(file, maxDimension = 1024, quality = 0.7) {
     };
     img.onerror = () => {
       URL.revokeObjectURL(objectUrl);
-      reject(new Error('Neuspešno učitavanje slike.'));
+      reject(new Error(t('imageLoadError')));
     };
     img.src = objectUrl;
   });
@@ -761,8 +975,8 @@ async function onReceiptSelected(event) {
   if (!file) return;
 
   scanningReceipt.value = true;
-  chatLog.push({ role: 'user', text: '📷 Poslata slika računa' });
-  chatLog.push({ role: 'assistant', text: 'Čitam račun…' });
+  chatLog.push({ role: 'user', text: t('receiptSent') });
+  chatLog.push({ role: 'assistant', text: t('readingReceipt') });
   scrollChatToBottom();
 
   try {
@@ -779,15 +993,15 @@ async function onReceiptSelected(event) {
       const category = data.category || 'Ostalo';
       chatLog.push({
         role: 'assistant',
-        text: `Da dodam trošak "${data.name}": ${data.amount} ${currency}, kategorija ${category}?`,
+        text: `${t('confirmAddPrefix')} ${t('chatActionExpense')} "${data.name}": ${data.amount} ${currency}, ${t('categoryWord')} ${categoryLabel(category)}?`,
         confirm: { action: 'add_expense', name: data.name, amount: data.amount, currency, freq: 0, category },
       });
     } else {
-      chatLog.push({ role: 'assistant', text: 'Nisam uspeo da pročitam račun sa slike — probaj jasniju fotografiju ili ukucaj ručno.' });
+      chatLog.push({ role: 'assistant', text: t('receiptUnclear') });
     }
   } catch (e) {
     chatLog.pop();
-    chatLog.push({ role: 'assistant', text: 'Nešto nije u redu sa slikom, probaj ponovo.' });
+    chatLog.push({ role: 'assistant', text: t('receiptError') });
   } finally {
     scanningReceipt.value = false;
     scrollChatToBottom();
@@ -817,7 +1031,7 @@ async function analyzeMonth() {
     });
     analysisText.value = data.tip;
   } catch (e) {
-    analysisError.value = 'Analiza trenutno nije dostupna.';
+    analysisError.value = t('analysisUnavailable');
   } finally {
     analyzing.value = false;
   }
@@ -849,7 +1063,7 @@ async function toggleYearView() {
 
 function monthAbbrev(period) {
   const [, m] = period.split('-').map(Number);
-  return MONTH_NAMES[m - 1].slice(0, 3);
+  return MONTH_NAMES.value[m - 1].slice(0, 3);
 }
 
 const yearChart = computed(() => {
@@ -869,9 +1083,20 @@ const yearChart = computed(() => {
     width, height, padding, x, y,
     incomePoints: months.map((m, i) => `${x(i)},${y(m.income)}`).join(' '),
     expensePoints: months.map((m, i) => `${x(i)},${y(m.expense)}`).join(' '),
-    gridlines: [0, 0.25, 0.5, 0.75, 1].map(t => height - padding - t * (height - padding * 2)),
+    gridlines: [0, 0.25, 0.5, 0.75, 1].map(pct => height - padding - pct * (height - padding * 2)),
   };
 });
+
+function bannerPrefix(label) {
+  return lang.value === 'en' ? `You have ` : `Iz ${label} ti je ostalo `;
+}
+function bannerSuffix(label) {
+  return lang.value === 'en' ? ` (net) left over from ${label}. Add it to savings?` : ` (neto). Dodati u štednju?`;
+}
+
+function switchLangUrl(target) {
+  return '/lang/' + target;
+}
 </script>
 
 <style>
@@ -1124,6 +1349,11 @@ const yearChart = computed(() => {
 }
 .theme-toggle:hover{ background:rgba(184,137,43,0.15); }
 .theme-toggle .icon{ width:13px; height:13px; }
+.lang-link{
+  position:absolute; right:34px; top:50%; transform:translateY(-50%);
+  font-size:11px; color:var(--ink-light); text-decoration:underline;
+  font-family:Georgia,serif; font-variant:small-caps;
+}
 
 .year-view{ padding-top:4px; }
 .year-legend{ display:flex; justify-content:center; gap:22px; margin:10px 0 16px 0; font-size:12px; color:var(--ink); }

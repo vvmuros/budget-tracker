@@ -1,5 +1,21 @@
+<?php
+$lang = request()->cookie('lang', 'sr');
+$t = [
+    'html_lang' => ['sr' => 'sr', 'en' => 'en'],
+    'title' => ['sr' => 'Registracija — Knjižica troškova', 'en' => 'Register — Budget Book'],
+    'heading' => ['sr' => 'Knjižica troškova', 'en' => 'Budget Book'],
+    'sub' => ['sr' => 'otvori novu ličnu evidenciju', 'en' => 'open a new personal ledger'],
+    'name' => ['sr' => 'Ime', 'en' => 'Name'],
+    'email' => ['sr' => 'Email', 'en' => 'Email'],
+    'password' => ['sr' => 'Lozinka', 'en' => 'Password'],
+    'password_confirm' => ['sr' => 'Ponovi lozinku', 'en' => 'Confirm password'],
+    'submit' => ['sr' => 'Registruj se', 'en' => 'Register'],
+    'has_account' => ['sr' => 'Već imaš nalog?', 'en' => 'Already have an account?'],
+    'login_link' => ['sr' => 'Prijavi se', 'en' => 'Log in'],
+];
+?>
 <!DOCTYPE html>
-<html lang="sr">
+<html lang="{{ $t['html_lang'][$lang] }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -13,7 +29,7 @@
 </script>
 <meta name="theme-color" content="#2E1B14">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-<title>Registracija — Knjižica troškova</title>
+<title>{{ $t['title'][$lang] }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=IM+Fell+English+SC&family=Cinzel:wght@600;900&display=swap" rel="stylesheet">
@@ -42,7 +58,10 @@
   .box{
     width:100%; max-width:380px; background:var(--parchment); border-radius:6px;
     padding:34px 30px; box-shadow:0 30px 60px -20px rgba(0,0,0,0.7), inset 0 0 0 2px rgba(184,137,43,0.35);
+    position:relative;
   }
+  .lang-switch{ position:absolute; top:12px; right:14px; font-size:11px; }
+  .lang-switch a{ color:var(--ink-light); text-decoration:underline; }
   h1{ text-align:center; font-family:'Cinzel',Georgia,serif; font-size:22px; margin:0 0 4px 0; }
   .sub{ text-align:center; font-size:12px; font-style:italic; color:var(--ink-light); margin-bottom:22px; }
   label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--ink-light); margin-bottom:4px; font-variant:small-caps; }
@@ -65,8 +84,11 @@
 </head>
 <body>
   <div class="box">
-    <h1>Knjižica troškova</h1>
-    <div class="sub">otvori novu ličnu evidenciju</div>
+    <div class="lang-switch">
+      <a href="{{ route('lang.switch', $lang === 'en' ? 'sr' : 'en') }}">{{ $lang === 'en' ? 'SR' : 'EN' }}</a>
+    </div>
+    <h1>{{ $t['heading'][$lang] }}</h1>
+    <div class="sub">{{ $t['sub'][$lang] }}</div>
 
     @if ($errors->any())
       <div class="err">{{ $errors->first() }}</div>
@@ -74,17 +96,17 @@
 
     <form method="POST" action="{{ route('register') }}">
       @csrf
-      <label>Ime</label>
+      <label>{{ $t['name'][$lang] }}</label>
       <input type="text" name="name" value="{{ old('name') }}" required autofocus>
-      <label>Email</label>
+      <label>{{ $t['email'][$lang] }}</label>
       <input type="email" name="email" value="{{ old('email') }}" required>
-      <label>Lozinka</label>
+      <label>{{ $t['password'][$lang] }}</label>
       <input type="password" name="password" required>
-      <label>Ponovi lozinku</label>
+      <label>{{ $t['password_confirm'][$lang] }}</label>
       <input type="password" name="password_confirmation" required>
-      <button type="submit">Registruj se</button>
+      <button type="submit">{{ $t['submit'][$lang] }}</button>
     </form>
-    <div class="foot">Već imaš nalog? <a href="{{ route('login') }}">Prijavi se</a></div>
+    <div class="foot">{{ $t['has_account'][$lang] }} <a href="{{ route('login') }}">{{ $t['login_link'][$lang] }}</a></div>
   </div>
   <script>
     if ('serviceWorker' in navigator) {
