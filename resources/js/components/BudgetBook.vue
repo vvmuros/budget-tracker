@@ -33,6 +33,8 @@
               v-if="voiceSupported" type="button" class="mic-btn" :class="{ listening: isListening }"
               :disabled="chatSending" @click="toggleVoiceInput" aria-label="Govorom unesi trošak"
             >{{ isListening ? '⏹' : '🎤' }}</button>
+            <button type="button" class="mic-btn" :disabled="chatSending || scanningReceipt" @click="triggerReceiptPicker" aria-label="Skeniraj račun">📷</button>
+            <input ref="receiptInputEl" type="file" accept="image/*" capture="environment" class="receipt-input" @change="onReceiptSelected">
             <button type="submit" :disabled="chatSending || isListening || !chatInput.trim()">Pošalji</button>
           </form>
         </div>
@@ -630,18 +632,24 @@ async function sendChatMessage() {
   scrollChatToBottom();
 
   try {
-    const { data } = await axios.post('/api/budget/chat', { message: text });
+    const { data } = await axios.post('/api/budget/chat', {
+      message: text,
+      expense_categories: EXPENSE_CATEGORIES,
+      savings_categories: SAVINGS_CATEGORIES,
+    });
     chatLog.pop();
 
     const validActions = ['add_expense', 'add_income', 'add_saving'];
     if (validActions.includes(data.action) && data.name && data.amount > 0) {
       const currency = data.currency || 'RSD';
       const freq = data.freq ?? 1;
+      const category = data.category || 'Ostalo';
       const freqText = data.action === 'add_saving' ? '' : `, ${FREQ_LABELS[freq] ?? 'mesečno'}`;
+      const catText = data.action === 'add_income' ? '' : `, kategorija ${category}`;
       chatLog.push({
         role: 'assistant',
-        text: `Da dodam ${CHAT_ACTION_LABELS[data.action]} "${data.name}": ${data.amount} ${currency}${freqText}?`,
-        confirm: { action: data.action, name: data.name, amount: data.amount, currency, freq },
+        text: `Da dodam ${CHAT_ACTION_LABELS[data.action]} "${data.name}": ${data.amount} ${currency}${freqText}${catText}?`,
+        confirm: { action: data.action, name: data.name, amount: data.amount, currency, freq, category },
       });
     } else {
       chatLog.push({ role: 'assistant', text: 'Nisam siguran šta si mislio/la — probaj konkretnije (npr. "potrošio sam 500 dinara na kafu").' });
@@ -656,15 +664,15 @@ async function sendChatMessage() {
 }
 
 function applyChatAction(msg) {
-  const { action, name, amount, currency, freq } = msg.confirm;
+  const { action, name, amount, currency, freq, category } = msg.confirm;
   if (action === 'add_expense') {
-    expenses.push({ name, amount, currency, freq, active: true, endPeriod: null, category: 'Ostalo' });
+    expenses.push({ name, amount, currency, freq, active: true, endPeriod: null, category: category || 'Ostalo' });
     saveExpenses();
   } else if (action === 'add_income') {
     income.push({ name, amount, currency, freq, active: true });
     saveIncome();
   } else if (action === 'add_saving') {
-    savings.push({ name, amount, currency, category: 'Ostalo' });
+    savings.push({ name, amount, currency, category: category || 'Ostalo' });
     saveSavings();
   }
   msg.confirm = null;
@@ -676,6 +684,85 @@ function rejectChatAction(msg) {
   msg.confirm = null;
   chatLog.push({ role: 'assistant', text: 'U redu, ništa nisam dodao.' });
   scrollChatToBottom();
+}
+
+const receiptInputEl = ref(null);
+const scanningReceipt = ref(false);
+
+function triggerReceiptPicker() {
+  receiptInputEl.value?.click();
+}
+
+function compressImageFile(file, maxDimension = 1024, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      let { width, height } = img;
+      if (width > height && width > maxDimension) {
+        height = Math.round(height * (maxDimension / width));
+        width = maxDimension;
+      } else if (height > maxDimension) {
+        width = Math.round(width * (maxDimension / height));
+        height = maxDimension;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+
+      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+      resolve(dataUrl.split(',')[1]);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Neuspešno učitavanje slike.'));
+    };
+    img.src = objectUrl;
+  });
+}
+
+async function onReceiptSelected(event) {
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+
+  scanningReceipt.value = true;
+  chatLog.push({ role: 'user', text: '📷 Poslata slika računa' });
+  chatLog.push({ role: 'assistant', text: 'Čitam račun…' });
+  scrollChatToBottom();
+
+  try {
+    const base64 = await compressImageFile(file);
+    const { data } = await axios.post('/api/budget/receipt', {
+      image: base64,
+      mime_type: 'image/jpeg',
+      expense_categories: EXPENSE_CATEGORIES,
+    });
+    chatLog.pop();
+
+    if (data.action === 'add_expense' && data.name && data.amount > 0) {
+      const currency = data.currency || 'RSD';
+      const category = data.category || 'Ostalo';
+      chatLog.push({
+        role: 'assistant',
+        text: `Da dodam trošak "${data.name}": ${data.amount} ${currency}, kategorija ${category}?`,
+        confirm: { action: 'add_expense', name: data.name, amount: data.amount, currency, freq: 0, category },
+      });
+    } else {
+      chatLog.push({ role: 'assistant', text: 'Nisam uspeo da pročitam račun sa slike — probaj jasniju fotografiju ili ukucaj ručno.' });
+    }
+  } catch (e) {
+    chatLog.pop();
+    chatLog.push({ role: 'assistant', text: 'Nešto nije u redu sa slikom, probaj ponovo.' });
+  } finally {
+    scanningReceipt.value = false;
+    scrollChatToBottom();
+  }
 }
 
 const analyzing = ref(false);
@@ -1049,6 +1136,7 @@ const yearChart = computed(() => {
 .chat-input button:hover:not(:disabled){ background:rgba(184,137,43,0.12); }
 .chat-input button:disabled{ opacity:0.5; cursor:default; }
 .mic-btn{ padding:6px 10px; font-size:14px; }
+.receipt-input{ display:none; }
 .mic-btn.listening{ background:rgba(122,31,31,0.15); border-color:var(--seal); animation:micPulse 1.2s ease-in-out infinite; }
 @keyframes micPulse{
   0%, 100%{ box-shadow:0 0 0 0 rgba(122,31,31,0.35); }

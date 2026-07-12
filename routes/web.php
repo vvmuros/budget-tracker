@@ -18,5 +18,6 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/budget', [BudgetController::class, 'store'])->name('budget.store');
     Route::post('/api/budget/chat', [BudgetController::class, 'chat'])->middleware('throttle:15,1')->name('budget.chat');
     Route::post('/api/budget/analyze', [BudgetController::class, 'analyze'])->middleware('throttle:6,1')->name('budget.analyze');
+    Route::post('/api/budget/receipt', [BudgetController::class, 'receipt'])->middleware('throttle:6,1')->name('budget.receipt');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });

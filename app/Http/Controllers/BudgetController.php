@@ -134,7 +134,13 @@ class BudgetController extends Controller
     {
         $data = $request->validate([
             'message' => ['required', 'string', 'max:500'],
+            'expense_categories' => ['required', 'array'],
+            'expense_categories.*' => ['string'],
+            'savings_categories' => ['required', 'array'],
+            'savings_categories.*' => ['string'],
         ]);
+
+        $categories = array_values(array_unique(array_merge($data['expense_categories'], $data['savings_categories'])));
 
         $schema = [
             'type' => 'OBJECT',
@@ -147,11 +153,13 @@ class BudgetController extends Controller
                 'amount' => ['type' => 'NUMBER'],
                 'currency' => ['type' => 'STRING', 'enum' => ['RSD', 'EUR', 'USD']],
                 'freq' => ['type' => 'INTEGER'],
+                'category' => ['type' => 'STRING', 'enum' => $categories],
             ],
-            'required' => ['action', 'name', 'amount', 'currency', 'freq'],
+            'required' => ['action', 'name', 'amount', 'currency', 'freq', 'category'],
         ];
 
         $message = $data['message'];
+        $categoryList = implode(', ', $categories);
         $prompt = <<<PROMPT
         Korisnik je napisao poruku o svojim finansijama na srpskom: "{$message}"
 
@@ -173,10 +181,65 @@ class BudgetController extends Controller
         (račun, članarina, rata kredita). Ne pretpostavljaj automatski da je nešto
         mesečno samo zato što učestalost nije eksplicitno navedena. Za štednju freq
         nije potreban.
+
+        Ako je add_expense ili add_saving, izaberi najprikladniju kategoriju (category)
+        iz ove liste na osnovu naziva stavke: {$categoryList}. Ako nijedna jasno ne
+        odgovara, koristi "Ostalo". Za add_income ili unclear, postavi category na
+        "Ostalo".
         PROMPT;
 
         try {
             $raw = $gemini->generate($prompt, $schema);
+            $parsed = json_decode($raw, true);
+        } catch (\Throwable) {
+            return response()->json(['action' => 'unclear']);
+        }
+
+        if (! $parsed || ! isset($parsed['action'])) {
+            return response()->json(['action' => 'unclear']);
+        }
+
+        return response()->json($parsed);
+    }
+
+    public function receipt(Request $request, GeminiClient $gemini)
+    {
+        $data = $request->validate([
+            'image' => ['required', 'string', 'max:6000000'],
+            'mime_type' => ['required', 'string', 'in:image/jpeg,image/png,image/webp'],
+            'expense_categories' => ['required', 'array'],
+            'expense_categories.*' => ['string'],
+        ]);
+
+        $categories = array_values(array_unique($data['expense_categories']));
+        $categoryList = implode(', ', $categories);
+
+        $schema = [
+            'type' => 'OBJECT',
+            'properties' => [
+                'action' => ['type' => 'STRING', 'enum' => ['add_expense', 'unclear']],
+                'name' => ['type' => 'STRING'],
+                'amount' => ['type' => 'NUMBER'],
+                'currency' => ['type' => 'STRING', 'enum' => ['RSD', 'EUR', 'USD']],
+                'category' => ['type' => 'STRING', 'enum' => $categories],
+            ],
+            'required' => ['action', 'name', 'amount', 'currency', 'category'],
+        ];
+
+        $prompt = <<<PROMPT
+        Ovo je slika računa iz prodavnice. Pročitaj naziv prodavnice ili glavnu stavku
+        (name), ukupan iznos za plaćanje (amount, samo broj), valutu (currency:
+        RSD/EUR/USD, podrazumevano RSD) i najprikladniju kategoriju (category) iz ove
+        liste: {$categoryList}. Ako nijedna jasno ne odgovara, koristi "Ostalo".
+
+        Ako slika nije čitljiva ili ne liči na račun, vrati action=unclear.
+        Inače vrati action=add_expense.
+        PROMPT;
+
+        try {
+            $raw = $gemini->generate($prompt, $schema, [
+                ['mime_type' => $data['mime_type'], 'data' => $data['image']],
+            ]);
             $parsed = json_decode($raw, true);
         } catch (\Throwable) {
             return response()->json(['action' => 'unclear']);

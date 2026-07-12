@@ -7,13 +7,22 @@ use RuntimeException;
 
 class GeminiClient
 {
-    public function generate(string $prompt, ?array $responseSchema = null): string
+    /**
+     * @param  array<int, array{mime_type: string, data: string}>|null  $images  Inline images (base64 data, no data: prefix).
+     */
+    public function generate(string $prompt, ?array $responseSchema = null, ?array $images = null): string
     {
         $model = config('services.gemini.model');
         $key = config('services.gemini.key');
 
+        $parts = [];
+        foreach ($images ?? [] as $image) {
+            $parts[] = ['inlineData' => ['mimeType' => $image['mime_type'], 'data' => $image['data']]];
+        }
+        $parts[] = ['text' => $prompt];
+
         $payload = [
-            'contents' => [['parts' => [['text' => $prompt]]]],
+            'contents' => [['parts' => $parts]],
         ];
 
         if ($responseSchema) {
