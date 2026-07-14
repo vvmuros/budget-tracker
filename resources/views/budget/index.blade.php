@@ -100,17 +100,31 @@ $lang = request()->cookie('lang', 'sr');
       var trigger = document.getElementById('user-menu-trigger');
       var dropdown = document.getElementById('user-menu-dropdown');
       if (!trigger || !dropdown) return;
+
+      function closeMenu(){
+        dropdown.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+      }
+      function openMenu(){
+        dropdown.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+      }
+
       trigger.addEventListener('click', function(e){
         e.stopPropagation();
-        var wasHidden = dropdown.hidden;
-        dropdown.hidden = !wasHidden;
-        trigger.setAttribute('aria-expanded', String(wasHidden));
+        if (dropdown.hidden) openMenu(); else closeMenu();
       });
-      document.addEventListener('click', function(e){
-        if (!dropdown.hidden && !dropdown.contains(e.target) && e.target !== trigger) {
-          dropdown.hidden = true;
-          trigger.setAttribute('aria-expanded', 'false');
+
+      // pointerdown (not click) — click-on-document is unreliable on iOS
+      // Safari for taps outside naturally-interactive elements.
+      document.addEventListener('pointerdown', function(e){
+        if (!dropdown.hidden && !dropdown.contains(e.target) && !trigger.contains(e.target)) {
+          closeMenu();
         }
+      });
+
+      document.addEventListener('keydown', function(e){
+        if (e.key === 'Escape') closeMenu();
       });
     })();
   </script>
