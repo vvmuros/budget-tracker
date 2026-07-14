@@ -15,19 +15,33 @@ $lang = request()->cookie('lang', 'sr');
     document.documentElement.setAttribute('data-theme', theme);
   })();
 </script>
-<meta name="theme-color" content="#2E1B14">
+<meta name="theme-color" content="#0A0D14">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-<title>{{ $lang === 'en' ? 'Budget Book — antique edition' : 'Knjižica troškova — antikvarno izdanje' }}</title>
+<title>Bilanso</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=IM+Fell+English+SC&family=Cinzel:wght@600;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
 @vite(['resources/css/app.css', 'resources/js/app.js'])
 <style>
+  :root{
+    --leather:#F3F5F9; --gilt:#0D9488; --ink-light:#69718A; --border:rgba(15,23,42,0.09);
+    --seal:#DC2626; --seal-bg:rgba(220,38,38,0.08); --on-seal:#FFFFFF;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --leather:#0A0D14; --gilt:#2DD4BF; --ink-light:#8B93A8; --border:rgba(255,255,255,0.08);
+      --seal:#F87171; --seal-bg:rgba(248,113,113,0.1); --on-seal:#2B0A0A;
+    }
+  }
+  :root[data-theme="dark"]{
+    --leather:#0A0D14; --gilt:#2DD4BF; --ink-light:#8B93A8; --border:rgba(255,255,255,0.08);
+    --seal:#F87171; --seal-bg:rgba(248,113,113,0.1); --on-seal:#2B0A0A;
+  }
   html,body{ height:100%; margin:0; }
   body{
     padding:36px 14px;
     min-height:100vh;
-    background:radial-gradient(ellipse at 50% 0%, #4A2A1E 0%, #2E1B14 55%, #1B0F0A 100%);
+    background:var(--leather);
     display:flex;
     flex-direction:column;
     align-items:center;
@@ -35,46 +49,46 @@ $lang = request()->cookie('lang', 'sr');
   .user-bar{
     width:100%; max-width:780px; margin-bottom:14px;
     display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;
-    font-family:'EB Garamond',Georgia,serif; color:#D8AE4C; font-size:13px;
+    font-family:'Inter',sans-serif; color:var(--ink-light); font-size:13px;
   }
   .user-bar span{ word-break:break-word; }
   .user-bar form{ margin:0; flex-shrink:0; }
   .user-bar button{
-    background:none; border:1px solid #B8892B; color:#EFE1BE;
-    font-family:Georgia,serif; font-variant:small-caps; font-size:12px;
+    background:none; border:1px solid var(--border); color:var(--ink-light);
+    font-family:'Inter',sans-serif; font-size:12.5px; border-radius:8px;
     padding:6px 14px; cursor:pointer;
   }
-  .user-bar button:hover{ background:rgba(184,137,43,0.2); }
+  .user-bar button:hover{ border-color:var(--gilt); color:var(--gilt); }
   @media (max-width:480px){
     body{ padding:20px 10px; }
   }
   .user-bar-actions{ display:flex; gap:10px; align-items:center; flex-shrink:0; }
   .danger-link{
-    background:none; border:none; color:#C6605F; font-family:Georgia,serif;
-    font-size:11px; text-decoration:underline; cursor:pointer; padding:0;
+    background:none; border:none; color:var(--seal); font-family:'Inter',sans-serif;
+    font-size:11.5px; text-decoration:underline; cursor:pointer; padding:0;
   }
-  .danger-link:hover{ color:#E08A88; }
+  .danger-link:hover{ opacity:0.8; }
   .delete-box{
     width:100%; max-width:780px; margin:0 0 14px 0; padding:14px 16px;
-    border:1px solid #7A1F1F; background:rgba(122,31,31,0.12);
-    font-family:'EB Garamond',Georgia,serif; color:#EFE1BE; font-size:12.5px;
+    border:1px solid var(--seal); background:var(--seal-bg); border-radius:12px;
+    font-family:'Inter',sans-serif; color:var(--ink-light); font-size:12.5px;
   }
   .delete-box p{ margin:0 0 10px 0; line-height:1.5; }
   .delete-box form{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   .delete-box input[type=password]{
-    font-family:Georgia,serif; font-size:13px; padding:6px 8px; background:rgba(0,0,0,0.2);
-    border:1px solid #B8892B; color:#EFE1BE; flex:1; min-width:160px;
+    font-family:'Inter',sans-serif; font-size:13px; padding:8px 10px; background:rgba(0,0,0,0.15);
+    border:1px solid var(--border); color:inherit; flex:1; min-width:160px; border-radius:8px;
   }
   .delete-box button[type=submit]{
-    background:#7A1F1F; border:1px solid #9C3232; color:#EFE1BE;
-    font-family:Georgia,serif; font-variant:small-caps; font-size:12px; padding:6px 14px; cursor:pointer;
+    background:var(--seal); border:1px solid var(--seal); color:var(--on-seal);
+    font-family:'Inter',sans-serif; font-weight:600; font-size:12.5px; padding:8px 14px; cursor:pointer; border-radius:8px;
   }
-  .delete-box button[type=submit]:hover{ background:#9C3232; }
+  .delete-box button[type=submit]:hover{ opacity:0.85; }
   .delete-box .cancel-btn{
-    background:none; border:1px solid #B8892B; color:#EFE1BE;
-    font-family:Georgia,serif; font-variant:small-caps; font-size:12px; padding:6px 14px; cursor:pointer;
+    background:none; border:1px solid var(--border); color:var(--ink-light);
+    font-family:'Inter',sans-serif; font-size:12.5px; padding:8px 14px; cursor:pointer; border-radius:8px;
   }
-  .delete-box .err{ color:#E08A88; font-size:12px; margin-top:8px; width:100%; }
+  .delete-box .err{ color:var(--seal); font-size:12px; margin-top:8px; width:100%; }
 </style>
 </head>
 <body>

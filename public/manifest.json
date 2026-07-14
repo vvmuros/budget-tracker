@@ -1,12 +1,12 @@
 {
-  "name": "Knjižica troškova",
-  "short_name": "Knjižica",
+  "name": "Bilanso",
+  "short_name": "Bilanso",
   "description": "Lična evidencija primanja, troškova i štednje.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#2E1B14",
-  "theme_color": "#2E1B14",
+  "background_color": "#0A0D14",
+  "theme_color": "#0A0D14",
   "icons": [
     {
       "src": "/icons/icon-192.png",

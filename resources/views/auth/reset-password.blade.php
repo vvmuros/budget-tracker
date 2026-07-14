@@ -2,8 +2,8 @@
 $lang = request()->cookie('lang', 'sr');
 $t = [
     'html_lang' => ['sr' => 'sr', 'en' => 'en'],
-    'title' => ['sr' => 'Nova lozinka — Knjižica troškova', 'en' => 'New password — Budget Book'],
-    'heading' => ['sr' => 'Knjižica troškova', 'en' => 'Budget Book'],
+    'title' => ['sr' => 'Nova lozinka — Bilanso', 'en' => 'New password — Bilanso'],
+    'heading' => ['sr' => 'Bilanso', 'en' => 'Bilanso'],
     'sub' => ['sr' => 'postavi novu lozinku', 'en' => 'set a new password'],
     'email' => ['sr' => 'Email', 'en' => 'Email'],
     'password' => ['sr' => 'Nova lozinka', 'en' => 'New password'],
@@ -25,56 +25,58 @@ $t = [
     document.documentElement.setAttribute('data-theme', theme);
   })();
 </script>
-<meta name="theme-color" content="#2E1B14">
+<meta name="theme-color" content="#0A0D14">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <title>{{ $t['title'][$lang] }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=IM+Fell+English+SC&family=Cinzel:wght@600;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --leather:#2E1B14; --leather-hi:#4A2A1E;
-    --parchment:#EFE1BE; --ink:#3B2A18; --ink-light:#7A6440;
-    --gilt:#B8892B; --seal:#7A1F1F;
+    --leather:#F3F5F9; --leather-hi:#FFFFFF;
+    --parchment:#FFFFFF; --ink:#161B26; --ink-light:#69718A;
+    --gilt:#0D9488; --seal:#DC2626; --on-accent:#FFFFFF; --border:rgba(15,23,42,0.09);
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
-      --parchment:#241A12; --ink:#EDE0C8; --ink-light:#B8A588;
-      --gilt:#C9A244; --seal:#C6605F;
+      --leather:#0A0D14; --leather-hi:#131826;
+      --parchment:#151A24; --ink:#EAEDF5; --ink-light:#8B93A8;
+      --gilt:#2DD4BF; --seal:#F87171; --on-accent:#0B1F1C; --border:rgba(255,255,255,0.08);
     }
   }
   :root[data-theme="dark"]{
-    --parchment:#241A12; --ink:#EDE0C8; --ink-light:#B8A588;
-    --gilt:#C9A244; --seal:#C6605F;
+    --leather:#0A0D14; --leather-hi:#131826;
+    --parchment:#151A24; --ink:#EAEDF5; --ink-light:#8B93A8;
+    --gilt:#2DD4BF; --seal:#F87171; --on-accent:#0B1F1C; --border:rgba(255,255,255,0.08);
   }
   *{box-sizing:border-box;}
   body{
     margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
-    background:radial-gradient(ellipse at 50% 0%, var(--leather-hi) 0%, var(--leather) 55%, #1B0F0A 100%);
-    font-family:'EB Garamond',Georgia,serif; color:var(--ink); padding:20px;
+    background:var(--leather);
+    font-family:'Inter',system-ui,sans-serif; color:var(--ink); padding:20px;
   }
   .box{
-    width:100%; max-width:380px; background:var(--parchment); border-radius:6px;
-    padding:34px 30px; box-shadow:0 30px 60px -20px rgba(0,0,0,0.7), inset 0 0 0 2px rgba(184,137,43,0.35);
+    width:100%; max-width:380px; background:var(--parchment); border-radius:16px;
+    padding:34px 30px; box-shadow:0 30px 60px -24px rgba(0,0,0,0.35); border:1px solid var(--border);
     position:relative;
   }
   .lang-switch{ position:absolute; top:12px; right:14px; font-size:11px; }
   .lang-switch a{ color:var(--ink-light); text-decoration:underline; }
-  h1{ text-align:center; font-family:'Cinzel',Georgia,serif; font-size:22px; margin:0 0 4px 0; }
-  .sub{ text-align:center; font-size:12px; font-style:italic; color:var(--ink-light); margin-bottom:22px; }
-  label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.6px; color:var(--ink-light); margin-bottom:4px; font-variant:small-caps; }
+  h1{ text-align:center; font-family:'Manrope',sans-serif; font-weight:800; font-size:22px; margin:0 0 4px 0; }
+  .sub{ text-align:center; font-size:12.5px; color:var(--ink-light); margin-bottom:22px; }
+  label{ display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-light); margin-bottom:4px; }
   input{
-    width:100%; font-family:Georgia,serif; font-size:14px; color:var(--ink);
-    background:transparent; border:none; border-bottom:1px solid var(--ink-light);
+    width:100%; font-family:'Inter',sans-serif; font-size:14px; color:var(--ink);
+    background:transparent; border:none; border-bottom:1px solid var(--border);
     padding:6px 2px; margin-bottom:16px;
   }
   input:focus{ outline:none; border-bottom:1px solid var(--gilt); }
   button{
-    width:100%; background:none; border:1px solid var(--gilt); color:var(--ink);
-    font-family:Georgia,serif; font-variant:small-caps; font-size:13px; padding:10px 14px;
-    cursor:pointer; letter-spacing:0.5px; margin-top:6px;
+    width:100%; background:var(--gilt); border:1px solid var(--gilt); color:var(--on-accent);
+    font-family:'Inter',sans-serif; font-weight:600; font-size:13.5px; padding:10px 14px;
+    cursor:pointer; margin-top:6px; border-radius:10px;
   }
-  button:hover{ background:rgba(184,137,43,0.12); }
+  button:hover{ opacity:0.88; }
   .err{ color:var(--seal); font-size:12.5px; margin-bottom:14px; }
   .foot{ text-align:center; margin-top:18px; font-size:12px; }
   .foot a{ color:var(--ink); }
