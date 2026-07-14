@@ -1230,7 +1230,7 @@ function formatEndPeriod(period) {
 }
 
 function openMonthPicker(event) {
-  const input = event.currentTarget.nextElementSibling;
+  const input = event.currentTarget.parentElement?.querySelector('input[type="month"]');
   if (!input) return;
   if (typeof input.showPicker === 'function') {
     input.showPicker();
