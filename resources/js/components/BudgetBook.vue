@@ -232,7 +232,13 @@
                     </select>
                   </td>
                   <td class="end-col" :data-label="t('untilMonth')">
-                    <input type="month" v-model="item.endPeriod" class="month-picker-native" @change="saveExpenses">
+                    <input
+                      v-if="editingEndPeriod === keyFor(item)" type="month" v-model="item.endPeriod" autofocus
+                      class="month-picker-native" @change="saveExpenses" @blur="editingEndPeriod = null"
+                    >
+                    <button v-else type="button" class="month-picker-btn" @click="editingEndPeriod = keyFor(item)">
+                      {{ item.endPeriod ? formatEndPeriod(item.endPeriod) : '—' }}
+                    </button>
                   </td>
                   <td class="cat-col" :data-label="t('category')">
                     <select v-model="item.category" @change="saveExpenses">
@@ -1201,6 +1207,13 @@ function monthAbbrev(period) {
   return MONTH_NAMES.value[m - 1].slice(0, 3);
 }
 
+function formatEndPeriod(period) {
+  const [y] = period.split('-');
+  return monthAbbrev(period) + ' ' + y;
+}
+
+const editingEndPeriod = ref(null);
+
 function smoothPath(points) {
   if (!points.length) return '';
   if (points.length === 1) return `M ${points[0][0].toFixed(1)},${points[0][1].toFixed(1)}`;
@@ -1491,10 +1504,14 @@ function switchLangUrl(target) {
 
 .month-picker-native{
   font-family:'Inter',sans-serif; font-size:12.5px; color:var(--ink); color-scheme:light dark;
-  background:transparent; border:none; border-bottom:1px solid transparent;
+  background:transparent; border:none; border-bottom:1px solid var(--gilt);
   width:100%; padding:4px 2px;
 }
-.month-picker-native:focus{ outline:none; border-bottom:1px solid var(--gilt); }
+.month-picker-btn{
+  background:none; border:none; color:var(--ink); font-family:'Inter',sans-serif; font-size:13px;
+  cursor:pointer; text-decoration:underline; text-decoration-style:dotted; text-decoration-color:var(--ink-light);
+  padding:3px 2px; text-align:left; white-space:nowrap;
+}
 
 .del-btn{ background:none; border:none; color:var(--seal); cursor:pointer; display:inline-flex; padding:4px; }
 .del-btn:hover{ opacity:0.7; }
