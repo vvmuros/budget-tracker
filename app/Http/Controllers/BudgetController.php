@@ -41,7 +41,14 @@ class BudgetController extends Controller
                 continue;
             }
 
-            $result[$key] = $resolved['value'];
+            $displayValue = $resolved['value'];
+            if (! $resolved['is_exact'] && in_array($key, ['expense-items', 'income-items'], true)) {
+                // A carried-forward month should only inherit recurring items —
+                // a one-time purchase from a past month has no business
+                // reappearing in a month that never explicitly saved it.
+                $displayValue = $this->stripOneTimeItems($displayValue);
+            }
+            $result[$key] = $displayValue;
 
             if (! $resolved['is_exact']) {
                 $isNewPeriod = true;
@@ -94,11 +101,18 @@ class BudgetController extends Controller
 
             $ratesArr = json_decode($rates['value'] ?? '{}', true) ?: ['usd' => 0, 'eur' => 0];
 
+            $incomeValue = $income && ! $income['is_exact']
+                ? $this->stripOneTimeItems($income['value'])
+                : ($income['value'] ?? '[]');
+            $expenseValue = $expense && ! $expense['is_exact']
+                ? $this->stripOneTimeItems($expense['value'])
+                : ($expense['value'] ?? '[]');
+
             $months[] = [
                 'period' => $cursor,
-                'income' => $this->sumActiveItems($income['value'] ?? '[]', $ratesArr, $cursor),
-                'expense' => $this->sumActiveItems($expense['value'] ?? '[]', $ratesArr, $cursor),
-                'categories' => $this->sumByCategory($expense['value'] ?? '[]', $ratesArr, $cursor),
+                'income' => $this->sumActiveItems($incomeValue, $ratesArr, $cursor),
+                'expense' => $this->sumActiveItems($expenseValue, $ratesArr, $cursor),
+                'categories' => $this->sumByCategory($expenseValue, $ratesArr, $cursor),
             ];
 
             $cursor = $this->incrementPeriod($cursor);
@@ -653,6 +667,26 @@ class BudgetController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * Strips one-time items (freq === 0) from a carried-forward template —
+     * they belong only to the month they were entered in, unlike recurring
+     * items which are meant to keep showing up until removed.
+     */
+    private function stripOneTimeItems(string $json): string
+    {
+        $items = json_decode($json, true);
+        if (! is_array($items)) {
+            return $json;
+        }
+
+        $filtered = array_values(array_filter(
+            $items,
+            fn ($item) => is_array($item) && (int) ($item['freq'] ?? 1) !== 0
+        ));
+
+        return json_encode($filtered);
     }
 
     private function incrementPeriod(string $period): string

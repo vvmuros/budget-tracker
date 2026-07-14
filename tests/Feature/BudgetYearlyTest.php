@@ -31,7 +31,7 @@ class BudgetYearlyTest extends TestCase
             'key' => 'expense-items',
             'period' => '2026-06',
             'value' => json_encode([
-                ['name' => 'Kafa', 'amount' => 500, 'currency' => 'RSD', 'freq' => 0, 'active' => true],
+                ['name' => 'Pretplata', 'amount' => 500, 'currency' => 'RSD', 'freq' => 1, 'active' => true],
             ]),
         ]);
 

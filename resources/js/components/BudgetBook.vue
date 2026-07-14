@@ -178,7 +178,7 @@
                     </select>
                   </td>
                   <td class="freq-col" :data-label="t('frequency')">
-                    <select :value="freqMode(item)" @change="setFreqMode(item, $event.target.value, onIncomeFreqChange)">
+                    <select :key="freqMode(item)" :value="freqMode(item)" @change="setFreqMode(item, $event.target.value, onIncomeFreqChange)">
                       <option value="monthly">{{ t('monthly') }}</option>
                       <option value="custom">{{ t('customInterval') }}</option>
                       <option value="onetime">{{ t('oneTime') }}</option>
@@ -230,7 +230,7 @@
                     </select>
                   </td>
                   <td class="freq-col" :data-label="t('frequency')">
-                    <select :value="freqMode(item)" @change="setFreqMode(item, $event.target.value, onExpenseFreqChange)">
+                    <select :key="freqMode(item)" :value="freqMode(item)" @change="setFreqMode(item, $event.target.value, onExpenseFreqChange)">
                       <option value="monthly">{{ t('monthly') }}</option>
                       <option value="custom">{{ t('customInterval') }}</option>
                       <option value="onetime">{{ t('oneTime') }}</option>
