@@ -232,9 +232,7 @@
                     </select>
                   </td>
                   <td class="end-col" :data-label="t('untilMonth')">
-                    <button type="button" class="month-picker-btn" @click="openMonthPicker($event)">{{ item.endPeriod ? formatEndPeriod(item.endPeriod) : '—' }}</button>
-                    <button v-if="item.endPeriod" type="button" class="month-picker-clear" @click="clearEndPeriod(item)" :aria-label="t('clearUntilMonth')">×</button>
-                    <input type="month" :value="item.endPeriod || ''" class="month-picker-input" @change="onEndPeriodChange(item, $event)">
+                    <input type="month" v-model="item.endPeriod" class="month-picker-native" @change="saveExpenses">
                   </td>
                   <td class="cat-col" :data-label="t('category')">
                     <select v-model="item.category" @change="saveExpenses">
@@ -428,7 +426,6 @@ const TRANSLATIONS = {
     currency: 'Valuta',
     frequency: 'Učestalost',
     untilMonth: 'Do meseca',
-    clearUntilMonth: 'Ukloni datum završetka',
     category: 'Kategorija',
     active: 'Akt.',
     monthly: 'mesečno',
@@ -516,7 +513,6 @@ const TRANSLATIONS = {
     currency: 'Currency',
     frequency: 'Frequency',
     untilMonth: 'Until month',
-    clearUntilMonth: 'Clear end date',
     category: 'Category',
     active: 'Active',
     monthly: 'monthly',
@@ -797,25 +793,6 @@ function onExpenseFreqChange(item) {
 function onIncomeFreqChange(item) {
   if (item.freq === 0) showOneTimeIncome.value = true;
   saveIncome();
-}
-
-function onEndPeriodChange(item, event) {
-  const value = event.target.value;
-  if (!value) {
-    // Some browsers fire a spurious change with an empty value when this
-    // hidden input loses focus/gets detached (e.g. navigating months right
-    // after opening the picker) — ignore that instead of silently wiping
-    // out a real end date.
-    event.target.value = item.endPeriod || '';
-    return;
-  }
-  item.endPeriod = value;
-  saveExpenses();
-}
-
-function clearEndPeriod(item) {
-  item.endPeriod = null;
-  saveExpenses();
 }
 
 const visibleIncome = computed(() => {
@@ -1224,21 +1201,6 @@ function monthAbbrev(period) {
   return MONTH_NAMES.value[m - 1].slice(0, 3);
 }
 
-function formatEndPeriod(period) {
-  const [y] = period.split('-');
-  return monthAbbrev(period) + ' ' + y;
-}
-
-function openMonthPicker(event) {
-  const input = event.currentTarget.parentElement?.querySelector('input[type="month"]');
-  if (!input) return;
-  if (typeof input.showPicker === 'function') {
-    input.showPicker();
-  } else {
-    input.focus();
-  }
-}
-
 function smoothPath(points) {
   if (!points.length) return '';
   if (points.length === 1) return `M ${points[0][0].toFixed(1)},${points[0][1].toFixed(1)}`;
@@ -1522,25 +1484,17 @@ function switchLangUrl(target) {
 .amt-col{ width:90px; }
 .cur-col{ width:64px; }
 .freq-col{ width:120px; }
-.end-col{ width:66px; position:relative; }
+.end-col{ width:118px; }
 .cat-col{ width:110px; }
 .chk-col{ width:36px; text-align:center; }
 .del-col{ width:26px; text-align:center; }
 
-.month-picker-btn{
-  background:none; border:none; color:var(--ink); font-family:'Inter',sans-serif; font-size:13px;
-  cursor:pointer; text-decoration:underline; text-decoration-style:dotted; text-decoration-color:var(--ink-light);
-  padding:3px 2px; text-align:left; white-space:nowrap;
+.month-picker-native{
+  font-family:'Inter',sans-serif; font-size:12.5px; color:var(--ink); color-scheme:light dark;
+  background:transparent; border:none; border-bottom:1px solid transparent;
+  width:100%; padding:4px 2px;
 }
-.month-picker-clear{
-  background:none; border:none; color:var(--ink-light); font-size:13px; line-height:1;
-  cursor:pointer; padding:2px 4px; margin-left:2px;
-}
-.month-picker-clear:hover{ color:var(--seal); }
-.month-picker-input{
-  position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;
-  overflow:hidden; border:none; padding:0;
-}
+.month-picker-native:focus{ outline:none; border-bottom:1px solid var(--gilt); }
 
 .del-btn{ background:none; border:none; color:var(--seal); cursor:pointer; display:inline-flex; padding:4px; }
 .del-btn:hover{ opacity:0.7; }
