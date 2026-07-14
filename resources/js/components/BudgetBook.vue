@@ -250,6 +250,10 @@
               {{ showOneTimeExpenses ? t('hideOneTimeExpenses') : t('showOneTimeExpenses') }} ({{ oneTimeExpensesCount }})
             </button>
 
+            <div class="savings-line" v-if="recurringExpTotal > 0">
+              {{ t('recurringExpensesLabel') }} <strong>{{ fmt(recurringExpTotal) }} RSD</strong>
+            </div>
+
             <div class="chart-section" v-if="categoryBreakdown.length">
               <div class="cat-bar-row" v-for="slice in categoryBreakdown" :key="slice.category">
                 <div class="cat-bar-label">{{ categoryLabel(slice.category) }}</div>
@@ -452,6 +456,7 @@ const TRANSLATIONS = {
     analyzing: 'Analiziram…',
     analyzeMonth: 'Analiziraj mesec',
     close: 'Zatvori',
+    recurringExpensesLabel: 'Mesečni troškovi koji se ponavljaju:',
     totalSavings: 'Ukupna ušteđevina:',
     footNote: 'Isključi "Akt." za stavke koje ovog meseca ne dospevaju.',
     resetDefaults: 'vrati na početne vrednosti',
@@ -538,6 +543,7 @@ const TRANSLATIONS = {
     analyzing: 'Analyzing…',
     analyzeMonth: 'Analyze month',
     close: 'Close',
+    recurringExpensesLabel: 'Recurring monthly expenses:',
     totalSavings: 'Total savings:',
     footNote: 'Turn off "Active" for items not due this month.',
     resetDefaults: 'reset to defaults',
@@ -796,6 +802,7 @@ const visibleIncome = computed(() => {
 });
 
 const expThis = computed(() => expenses.reduce((sum, it) => isExpenseActive(it) ? sum + toRSD(it.amount, it.currency) : sum, 0));
+const recurringExpTotal = computed(() => expenses.reduce((sum, it) => (isExpenseActive(it) && it.freq !== 0) ? sum + toRSD(it.amount, it.currency) : sum, 0));
 const incThis = computed(() => income.reduce((sum, it) => it.active ? sum + toRSD(it.amount, it.currency) : sum, 0));
 const expAvg = computed(() => expenses.reduce((sum, it) => {
   if (!isExpenseActive(it)) return sum;
