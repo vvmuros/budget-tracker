@@ -644,9 +644,14 @@ const conv = reactive({ amount: 1000, from: 'RSD', to: 'EUR' });
 function clone(x) { return JSON.parse(JSON.stringify(x)); }
 function replaceArray(target, source) { target.splice(0, target.length, ...source); }
 
+function generateId() {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
 const rowIdMap = new WeakMap();
 let rowIdCounter = 0;
 function keyFor(item) {
+  if (item.id) return item.id;
   if (!rowIdMap.has(item)) rowIdMap.set(item, ++rowIdCounter);
   return rowIdMap.get(item);
 }
@@ -666,11 +671,24 @@ async function loadState(period) {
   replaceArray(income, clone(defaultIncome));
   Object.assign(rates, clone(defaultRates));
 
+  let needsExpensesIdBackfill = false;
+  let needsIncomeIdBackfill = false;
+
   try {
     const { data } = await axios.get('/api/budget', { params: { period } });
     const d = data.data || {};
-    if (d['expense-items']) replaceArray(expenses, JSON.parse(d['expense-items']).map(it => ({ category: 'Ostalo', ...it })));
-    if (d['income-items']) replaceArray(income, JSON.parse(d['income-items']));
+    if (d['expense-items']) {
+      replaceArray(expenses, JSON.parse(d['expense-items']).map(it => {
+        if (!it.id) needsExpensesIdBackfill = true;
+        return { id: it.id || generateId(), category: 'Ostalo', ...it };
+      }));
+    }
+    if (d['income-items']) {
+      replaceArray(income, JSON.parse(d['income-items']).map(it => {
+        if (!it.id) needsIncomeIdBackfill = true;
+        return { id: it.id || generateId(), ...it };
+      }));
+    }
     if (d['expense-rates']) Object.assign(rates, JSON.parse(d['expense-rates']));
     if (d['savings-items']) replaceArray(savings, JSON.parse(d['savings-items']).map(it => ({ category: 'Ostalo', ...it })));
 
@@ -680,6 +698,11 @@ async function loadState(period) {
       bannerPreviousLabel.value = periodLabel(data.template_period);
       bannerVisible.value = data.previous_net > 0;
     }
+
+    // Older rows saved before items had a stable id — persist the
+    // freshly-assigned ones now so future edits mirror correctly.
+    if (needsExpensesIdBackfill) saveExpenses();
+    if (needsIncomeIdBackfill) saveIncome();
   } catch (e) {
     // nema sacuvanih podataka jos — ostaju podrazumevane vrednosti
   } finally {
@@ -710,11 +733,11 @@ function saveSavings() { persist('savings-items', savings); }
 function saveRates() { persist('expense-rates', rates, currentPeriod.value); }
 
 function addRow(arr, name, save) {
-  arr.push({ name, amount: 0, currency: 'RSD', freq: 1, active: true, endPeriod: null, category: 'Ostalo' });
+  arr.push({ id: generateId(), name, amount: 0, currency: 'RSD', freq: 1, active: true, endPeriod: null, category: 'Ostalo' });
   save();
 }
 function addSavingsRow() {
-  savings.push({ name: t('newSavingName'), amount: 0, currency: 'RSD', category: 'Ostalo' });
+  savings.push({ id: generateId(), name: t('newSavingName'), amount: 0, currency: 'RSD', category: 'Ostalo' });
   saveSavings();
 }
 function removeRow(arr, item, save) {
@@ -1049,13 +1072,13 @@ async function sendChatMessage() {
 function applyChatAction(msg) {
   const { action, name, amount, currency, freq, category } = msg.confirm;
   if (action === 'add_expense') {
-    expenses.push({ name, amount, currency, freq, active: true, endPeriod: null, category: category || 'Ostalo' });
+    expenses.push({ id: generateId(), name, amount, currency, freq, active: true, endPeriod: null, category: category || 'Ostalo' });
     saveExpenses();
   } else if (action === 'add_income') {
-    income.push({ name, amount, currency, freq, active: true });
+    income.push({ id: generateId(), name, amount, currency, freq, active: true });
     saveIncome();
   } else if (action === 'add_saving') {
-    savings.push({ name, amount, currency, category: category || 'Ostalo' });
+    savings.push({ id: generateId(), name, amount, currency, category: category || 'Ostalo' });
     saveSavings();
   }
   msg.confirm = null;

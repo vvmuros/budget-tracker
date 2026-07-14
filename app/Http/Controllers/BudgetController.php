@@ -67,7 +67,7 @@ class BudgetController extends Controller
             'is_new_period' => $isNewPeriod,
             'previous_net' => $previousNet,
             'template_period' => $templatePeriod,
-        ]);
+        ])->header('Cache-Control', 'no-store, must-revalidate');
     }
 
     public function yearly(Request $request)
@@ -128,7 +128,78 @@ class BudgetController extends Controller
             ['value' => $data['value'] ?? '']
         );
 
+        if (in_array($data['key'], ['expense-items', 'income-items'], true) && $period !== 'global') {
+            $this->mirrorRecurringItemsForward($request->user(), $data['key'], $period, $data['value'] ?? '');
+        }
+
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Recurring items (freq !== 0) are meant to look the same everywhere once
+     * edited — propagate name/amount/currency/freq/category/endPeriod to any
+     * later month that already has its own saved row, without touching that
+     * row's own "active" flag (that stays per-month on purpose, e.g. for a
+     * quarterly bill you skip some months).
+     */
+    private function mirrorRecurringItemsForward(User $user, string $key, string $period, string $json): void
+    {
+        $items = json_decode($json, true);
+        if (! is_array($items)) {
+            return;
+        }
+
+        $sharedFields = ['name', 'amount', 'currency', 'freq', 'category', 'endPeriod'];
+        $recurringById = [];
+        $recurringByName = [];
+
+        foreach ($items as $item) {
+            if (! is_array($item) || (int) ($item['freq'] ?? 0) === 0) {
+                continue;
+            }
+            $shared = array_intersect_key($item, array_flip($sharedFields));
+            if (! empty($item['id'])) {
+                $recurringById[$item['id']] = $shared;
+            }
+            $recurringByName[$item['name'] ?? ''] = $shared;
+        }
+
+        if (! $recurringById && ! $recurringByName) {
+            return;
+        }
+
+        $futureRows = $user->budgetData()->where('key', $key)->where('period', '>', $period)->get();
+
+        foreach ($futureRows as $row) {
+            $rowItems = json_decode($row->value, true);
+            if (! is_array($rowItems)) {
+                continue;
+            }
+
+            $changed = false;
+            foreach ($rowItems as &$rowItem) {
+                if (! is_array($rowItem)) {
+                    continue;
+                }
+
+                $shared = null;
+                if (! empty($rowItem['id']) && isset($recurringById[$rowItem['id']])) {
+                    $shared = $recurringById[$rowItem['id']];
+                } elseif (isset($recurringByName[$rowItem['name'] ?? ''])) {
+                    $shared = $recurringByName[$rowItem['name']];
+                }
+
+                if ($shared) {
+                    $rowItem = array_merge($rowItem, $shared);
+                    $changed = true;
+                }
+            }
+            unset($rowItem);
+
+            if ($changed) {
+                $row->update(['value' => json_encode($rowItems)]);
+            }
+        }
     }
 
     public function chat(Request $request, GeminiClient $gemini)
