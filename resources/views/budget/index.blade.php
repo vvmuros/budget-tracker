@@ -24,18 +24,15 @@ $lang = request()->cookie('lang', 'sr');
 @vite(['resources/css/app.css', 'resources/js/app.js'])
 <style>
   :root{
-    --leather:#F3F5F9; --gilt:#0D9488; --ink-light:#69718A; --border:rgba(15,23,42,0.09);
-    --seal:#DC2626; --seal-bg:rgba(220,38,38,0.08); --on-seal:#FFFFFF;
+    --leather:#F3F5F9; --card:#FFFFFF; --gilt:#0D9488; --ink:#161B26; --ink-light:#69718A; --border:rgba(15,23,42,0.09);
   }
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
-      --leather:#0A0D14; --gilt:#2DD4BF; --ink-light:#8B93A8; --border:rgba(255,255,255,0.08);
-      --seal:#F87171; --seal-bg:rgba(248,113,113,0.1); --on-seal:#2B0A0A;
+      --leather:#0A0D14; --card:#131826; --gilt:#2DD4BF; --ink:#EAEDF5; --ink-light:#8B93A8; --border:rgba(255,255,255,0.08);
     }
   }
   :root[data-theme="dark"]{
-    --leather:#0A0D14; --gilt:#2DD4BF; --ink-light:#8B93A8; --border:rgba(255,255,255,0.08);
-    --seal:#F87171; --seal-bg:rgba(248,113,113,0.1); --on-seal:#2B0A0A;
+    --leather:#0A0D14; --card:#131826; --gilt:#2DD4BF; --ink:#EAEDF5; --ink-light:#8B93A8; --border:rgba(255,255,255,0.08);
   }
   html,body{ height:100%; margin:0; }
   body{
@@ -52,87 +49,69 @@ $lang = request()->cookie('lang', 'sr');
     font-family:'Inter',sans-serif; color:var(--ink-light); font-size:13px;
   }
   .user-bar span{ word-break:break-word; }
-  .user-bar form{ margin:0; flex-shrink:0; }
-  .user-bar button{
-    background:none; border:1px solid var(--border); color:var(--ink-light);
-    font-family:'Inter',sans-serif; font-size:12.5px; border-radius:8px;
-    padding:6px 14px; cursor:pointer;
-  }
-  .user-bar button:hover{ border-color:var(--gilt); color:var(--gilt); }
   @media (max-width:480px){
     body{ padding:20px 10px; }
   }
-  .user-bar-actions{ display:flex; gap:10px; align-items:center; flex-shrink:0; }
-  .danger-link{
-    background:none; border:none; color:var(--seal); font-family:'Inter',sans-serif;
-    font-size:11.5px; text-decoration:underline; cursor:pointer; padding:0;
-  }
-  .danger-link:hover{ opacity:0.8; }
-  .delete-box{
-    width:100%; max-width:780px; margin:0 0 14px 0; padding:14px 16px;
-    border:1px solid var(--seal); background:var(--seal-bg); border-radius:12px;
-    font-family:'Inter',sans-serif; color:var(--ink-light); font-size:12.5px;
-  }
-  .delete-box p{ margin:0 0 10px 0; line-height:1.5; }
-  .delete-box form{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-  .delete-box input[type=password]{
-    font-family:'Inter',sans-serif; font-size:13px; padding:8px 10px; background:rgba(0,0,0,0.15);
-    border:1px solid var(--border); color:inherit; flex:1; min-width:160px; border-radius:8px;
-  }
-  .delete-box button[type=submit]{
-    background:var(--seal); border:1px solid var(--seal); color:var(--on-seal);
-    font-family:'Inter',sans-serif; font-weight:600; font-size:12.5px; padding:8px 14px; cursor:pointer; border-radius:8px;
-  }
-  .delete-box button[type=submit]:hover{ opacity:0.85; }
-  .delete-box .cancel-btn{
+  .user-menu{ position:relative; flex-shrink:0; }
+  .user-menu-trigger{
     background:none; border:1px solid var(--border); color:var(--ink-light);
-    font-family:'Inter',sans-serif; font-size:12.5px; padding:8px 14px; cursor:pointer; border-radius:8px;
+    font-family:'Inter',sans-serif; font-size:12.5px; border-radius:8px;
+    padding:6px 10px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;
   }
-  .delete-box .err{ color:var(--seal); font-size:12px; margin-top:8px; width:100%; }
+  .user-menu-trigger:hover{ border-color:var(--gilt); color:var(--gilt); }
+  .user-menu-trigger .chevron{ width:10px; height:10px; }
+  .user-menu-dropdown{
+    position:absolute; right:0; top:calc(100% + 6px); z-index:10;
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:6px; min-width:160px; display:flex; flex-direction:column; gap:2px;
+    box-shadow:0 12px 30px -10px rgba(0,0,0,0.5);
+  }
+  .user-menu-dropdown a, .user-menu-dropdown button{
+    display:block; width:100%; text-align:left; background:none; border:none;
+    color:var(--ink); font-family:'Inter',sans-serif; font-size:13px;
+    padding:8px 10px; border-radius:6px; cursor:pointer; text-decoration:none;
+  }
+  .user-menu-dropdown a:hover, .user-menu-dropdown button:hover{ background:var(--border); }
+  .user-menu-dropdown form{ margin:0; }
 </style>
 </head>
 <body>
   <div class="user-bar">
     <span>{{ auth()->user()->name }} ({{ auth()->user()->email }})</span>
-    <div class="user-bar-actions">
-      <form method="POST" action="{{ route('logout') }}">
-        @csrf
-        <button type="submit">{{ $lang === 'en' ? 'Log out' : 'Odjavi se' }}</button>
-      </form>
-      <button type="button" class="danger-link" id="delete-account-toggle">{{ $lang === 'en' ? 'Delete account' : 'Obriši nalog' }}</button>
+    <div class="user-menu">
+      <button type="button" class="user-menu-trigger" id="user-menu-trigger" aria-haspopup="true" aria-expanded="false">
+        {{ $lang === 'en' ? 'Account' : 'Nalog' }}
+        <svg viewBox="0 0 16 16" class="chevron"><path d="M4 6 L8 10 L12 6" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="user-menu-dropdown" id="user-menu-dropdown" hidden>
+        <a href="{{ route('settings') }}">{{ $lang === 'en' ? 'Settings' : 'Podešavanja' }}</a>
+        <form method="POST" action="{{ route('logout') }}">
+          @csrf
+          <button type="submit">{{ $lang === 'en' ? 'Sign out' : 'Odjavi se' }}</button>
+        </form>
+      </div>
     </div>
-  </div>
-
-  <div class="delete-box" id="delete-account-box" hidden>
-    <p>
-      {{ $lang === 'en'
-        ? 'This permanently deletes your account and every ledger entry you have saved. This cannot be undone.'
-        : 'Ovo trajno briše tvoj nalog i sve unose u knjižici koje si sačuvao. Ovo se ne može poništiti.' }}
-    </p>
-    <form method="POST" action="{{ route('account.delete') }}">
-      @csrf
-      <input type="password" name="password" placeholder="{{ $lang === 'en' ? 'Confirm your password' : 'Potvrdi lozinku' }}" required autocomplete="current-password">
-      <button type="submit" onclick="return confirm('{{ $lang === 'en' ? 'Are you sure? This cannot be undone.' : 'Da li si siguran? Ovo se ne moze ponistiti.' }}')">{{ $lang === 'en' ? 'Permanently delete' : 'Trajno obriši' }}</button>
-      <button type="button" class="cancel-btn" id="delete-account-cancel">{{ $lang === 'en' ? 'Cancel' : 'Otkaži' }}</button>
-      @error('password')
-        <div class="err">{{ $message }}</div>
-      @enderror
-    </form>
   </div>
 
   <div id="budget-app"></div>
 
   <script>
     (function(){
-      var toggle = document.getElementById('delete-account-toggle');
-      var box = document.getElementById('delete-account-box');
-      var cancel = document.getElementById('delete-account-cancel');
-      if (toggle && box) {
-        toggle.addEventListener('click', function(){ box.hidden = !box.hidden; });
-      }
-      if (cancel && box) {
-        cancel.addEventListener('click', function(){ box.hidden = true; });
-      }
+      var trigger = document.getElementById('user-menu-trigger');
+      var dropdown = document.getElementById('user-menu-dropdown');
+      if (!trigger || !dropdown) return;
+      trigger.addEventListener('click', function(e){
+        e.stopPropagation();
+        var wasHidden = dropdown.hidden;
+        dropdown.hidden = !wasHidden;
+        trigger.setAttribute('aria-expanded', String(wasHidden));
+      });
+      document.addEventListener('click', function(e){
+        if (!dropdown.hidden && !dropdown.contains(e.target) && e.target !== trigger) {
+          dropdown.hidden = true;
+          trigger.setAttribute('aria-expanded', 'false');
+        }
+      });
     })();
   </script>
 </body>

@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\PushController;
+use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Route;
 
@@ -35,6 +36,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/account/delete', [AuthController::class, 'deleteAccount'])
         ->middleware('throttle:6,1')->name('account.delete');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+    Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
 });
 
 // 'verified' dropped for now — Resend has no verified domain yet, so
