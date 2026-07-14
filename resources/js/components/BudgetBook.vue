@@ -233,7 +233,8 @@
                   </td>
                   <td class="end-col" :data-label="t('untilMonth')">
                     <button type="button" class="month-picker-btn" @click="openMonthPicker($event)">{{ item.endPeriod ? formatEndPeriod(item.endPeriod) : '—' }}</button>
-                    <input type="month" v-model="item.endPeriod" class="month-picker-input" @change="saveExpenses">
+                    <button v-if="item.endPeriod" type="button" class="month-picker-clear" @click="clearEndPeriod(item)" :aria-label="t('clearUntilMonth')">×</button>
+                    <input type="month" :value="item.endPeriod || ''" class="month-picker-input" @change="onEndPeriodChange(item, $event)">
                   </td>
                   <td class="cat-col" :data-label="t('category')">
                     <select v-model="item.category" @change="saveExpenses">
@@ -427,6 +428,7 @@ const TRANSLATIONS = {
     currency: 'Valuta',
     frequency: 'Učestalost',
     untilMonth: 'Do meseca',
+    clearUntilMonth: 'Ukloni datum završetka',
     category: 'Kategorija',
     active: 'Akt.',
     monthly: 'mesečno',
@@ -514,6 +516,7 @@ const TRANSLATIONS = {
     currency: 'Currency',
     frequency: 'Frequency',
     untilMonth: 'Until month',
+    clearUntilMonth: 'Clear end date',
     category: 'Category',
     active: 'Active',
     monthly: 'monthly',
@@ -794,6 +797,25 @@ function onExpenseFreqChange(item) {
 function onIncomeFreqChange(item) {
   if (item.freq === 0) showOneTimeIncome.value = true;
   saveIncome();
+}
+
+function onEndPeriodChange(item, event) {
+  const value = event.target.value;
+  if (!value) {
+    // Some browsers fire a spurious change with an empty value when this
+    // hidden input loses focus/gets detached (e.g. navigating months right
+    // after opening the picker) — ignore that instead of silently wiping
+    // out a real end date.
+    event.target.value = item.endPeriod || '';
+    return;
+  }
+  item.endPeriod = value;
+  saveExpenses();
+}
+
+function clearEndPeriod(item) {
+  item.endPeriod = null;
+  saveExpenses();
 }
 
 const visibleIncome = computed(() => {
@@ -1510,6 +1532,11 @@ function switchLangUrl(target) {
   cursor:pointer; text-decoration:underline; text-decoration-style:dotted; text-decoration-color:var(--ink-light);
   padding:3px 2px; text-align:left; white-space:nowrap;
 }
+.month-picker-clear{
+  background:none; border:none; color:var(--ink-light); font-size:13px; line-height:1;
+  cursor:pointer; padding:2px 4px; margin-left:2px;
+}
+.month-picker-clear:hover{ color:var(--seal); }
 .month-picker-input{
   position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;
   overflow:hidden; border:none; padding:0;
