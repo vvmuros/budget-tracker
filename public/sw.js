@@ -1,4 +1,4 @@
-const CACHE_NAME = 'budget-tracker-static-v1';
+const CACHE_NAME = 'budget-tracker-static-v2';
 const CACHEABLE_PATTERNS = [/^\/build\//, /^\/icons\//, /^https:\/\/fonts\.(googleapis|gstatic)\.com\//];
 
 self.addEventListener('install', () => {
