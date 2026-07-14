@@ -63,9 +63,10 @@ $lang = request()->cookie('lang', 'sr');
   .user-menu-dropdown{
     position:absolute; right:0; top:calc(100% + 6px); z-index:10;
     background:var(--card); border:1px solid var(--border); border-radius:10px;
-    padding:6px; min-width:160px; display:flex; flex-direction:column; gap:2px;
+    padding:6px; min-width:160px; display:none; flex-direction:column; gap:2px;
     box-shadow:0 12px 30px -10px rgba(0,0,0,0.5);
   }
+  .user-menu-dropdown:not([hidden]){ display:flex; }
   .user-menu-dropdown a, .user-menu-dropdown button{
     display:block; width:100%; text-align:left; background:none; border:none;
     color:var(--ink); font-family:'Inter',sans-serif; font-size:13px;
