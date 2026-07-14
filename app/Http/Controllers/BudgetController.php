@@ -12,6 +12,14 @@ class BudgetController extends Controller
 {
     private const PERIODIC_KEYS = ['expense-items', 'income-items', 'expense-rates'];
 
+    private const GLOBAL_KEYS = [
+        'savings-items',
+        'custom-categories-expense',
+        'custom-categories-savings',
+        'category-usage-expense',
+        'category-usage-savings',
+    ];
+
     public function __construct(private BudgetCalculator $calc)
     {
     }
@@ -30,9 +38,11 @@ class BudgetController extends Controller
 
         $result = [];
 
-        $savings = $user->budgetData()->where('key', 'savings-items')->where('period', 'global')->value('value');
-        if ($savings !== null) {
-            $result['savings-items'] = $savings;
+        foreach (self::GLOBAL_KEYS as $key) {
+            $value = $user->budgetData()->where('key', $key)->where('period', 'global')->value('value');
+            if ($value !== null) {
+                $result[$key] = $value;
+            }
         }
 
         $isNewPeriod = false;
@@ -137,7 +147,7 @@ class BudgetController extends Controller
             'period' => ['nullable', 'string', 'regex:/^\d{4}-\d{2}$/'],
         ]);
 
-        $period = $data['key'] === 'savings-items'
+        $period = in_array($data['key'], self::GLOBAL_KEYS, true)
             ? 'global'
             : ($data['period'] ?? now()->format('Y-m'));
 

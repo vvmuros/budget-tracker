@@ -47,10 +47,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/api/budget', [BudgetController::class, 'fetch'])->name('budget.fetch');
     Route::get('/api/budget/yearly', [BudgetController::class, 'yearly'])->name('budget.yearly');
     Route::post('/api/budget', [BudgetController::class, 'store'])->name('budget.store');
-    Route::post('/api/budget/chat', [BudgetController::class, 'chat'])->middleware('throttle:15,1')->name('budget.chat');
-    Route::post('/api/budget/voice', [BudgetController::class, 'voice'])->middleware('throttle:15,1')->name('budget.voice');
-    Route::post('/api/budget/analyze', [BudgetController::class, 'analyze'])->middleware('throttle:6,1')->name('budget.analyze');
-    Route::post('/api/budget/receipt', [BudgetController::class, 'receipt'])->middleware('throttle:6,1')->name('budget.receipt');
+    Route::post('/api/budget/chat', [BudgetController::class, 'chat'])->middleware(['throttle:15,1', 'gemini.quota'])->name('budget.chat');
+    Route::post('/api/budget/voice', [BudgetController::class, 'voice'])->middleware(['throttle:15,1', 'gemini.quota'])->name('budget.voice');
+    Route::post('/api/budget/analyze', [BudgetController::class, 'analyze'])->middleware(['throttle:6,1', 'gemini.quota'])->name('budget.analyze');
+    Route::post('/api/budget/receipt', [BudgetController::class, 'receipt'])->middleware(['throttle:6,1', 'gemini.quota'])->name('budget.receipt');
 
     Route::get('/api/push/public-key', [PushController::class, 'publicKey'])->name('push.publicKey');
     Route::post('/api/push/subscribe', [PushController::class, 'subscribe'])->name('push.subscribe');

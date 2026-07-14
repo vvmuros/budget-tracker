@@ -26,7 +26,7 @@ class BudgetCalculator
         $items = json_decode($json, true) ?: [];
 
         return collect($items)
-            ->filter(fn ($it) => $this->isItemActive($it, $period))
+            ->filter(fn ($it) => $this->isItemActive($it, $period) && empty($it['paidFromSavings']))
             ->sum(fn ($it) => $this->toRsd($it['amount'] ?? 0, $it['currency'] ?? 'RSD', $rates));
     }
 

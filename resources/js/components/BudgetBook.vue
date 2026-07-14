@@ -68,7 +68,7 @@
             <div class="year-legend">
               <span class="legend-item"><span class="swatch line-swatch" :style="{ background: YEAR_COLORS.income }"></span>{{ t('income') }}</span>
               <span class="legend-item" v-for="cat in yearChart.categoriesUsed" :key="cat">
-                <span class="swatch" :style="{ background: categoryColor(cat, EXPENSE_CATEGORIES) }"></span>{{ categoryLabel(cat) }}
+                <span class="swatch" :style="{ background: categoryColor(cat, allExpenseCategories) }"></span>{{ categoryLabel(cat) }}
               </span>
             </div>
 
@@ -218,7 +218,7 @@
               <TransitionGroup tag="tbody" name="row">
                 <tr v-for="item in visibleExpenses" :key="keyFor(item)" :class="{ inactive: !isExpenseActive(item) }">
                   <td class="cell-name">
-                    <span class="cat-dot" :style="{ background: categoryColor(item.category, EXPENSE_CATEGORIES) }"></span>
+                    <span class="cat-dot" :style="{ background: categoryColor(item.category, allExpenseCategories) }"></span>
                     <input type="text" v-model="item.name" :title="item.name" @change="saveExpenses">
                   </td>
                   <td class="amt-col" :data-label="t('amount')"><input type="number" v-model.number="item.amount" step="1" @change="saveExpenses"></td>
@@ -253,12 +253,37 @@
                     </button>
                   </td>
                   <td class="cat-col" :data-label="t('category')">
-                    <select v-model="item.category" @change="saveExpenses">
-                      <option v-for="cat in EXPENSE_CATEGORIES" :key="cat" :value="cat">{{ categoryLabel(cat) }}</option>
+                    <input
+                      v-if="addingCategoryFor === keyFor(item)" type="text" v-model="newCategoryName" autofocus
+                      class="month-picker-native" :placeholder="t('newCategoryPlaceholder')"
+                      @keyup.enter="confirmNewCategory(item, 'expense')" @blur="confirmNewCategory(item, 'expense')"
+                    >
+                    <select v-else :key="item.category" :value="item.category" @change="onCategorySelect($event, item, 'expense')">
+                      <option v-for="cat in expenseCategoryOptions" :key="cat" :value="cat">{{ categoryLabel(cat) }}</option>
+                      <option value="__add__">{{ t('addCategoryOption') }}</option>
                     </select>
                   </td>
                   <td class="chk-col" :data-label="t('active')"><input type="checkbox" v-model="item.active" @change="saveExpenses"></td>
-                  <td class="del-col"><button class="del-btn" @click="removeRow(expenses, item, saveExpenses)" :aria-label="t('deleteRow')"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
+                  <td class="del-col">
+                    <div v-if="payingFromSavingsFor === keyFor(item)" class="savings-pick">
+                      <select v-model="payFromSavingsChoice">
+                        <option v-for="s in savings" :key="s.id" :value="s.id">{{ s.name }}</option>
+                      </select>
+                      <button class="del-btn" type="button" @click="confirmPayFromSavings(item, payFromSavingsChoice)" :aria-label="t('confirmBtn')">✓</button>
+                      <button class="del-btn" type="button" @click="cancelPayFromSavings" :aria-label="t('cancelBtn')">✕</button>
+                    </div>
+                    <template v-else>
+                      <button
+                        v-if="savings.length"
+                        class="del-btn savings-btn"
+                        type="button"
+                        :class="{ active: item.paidFromSavings }"
+                        :title="item.paidFromSavings ? t('paidFromSavingsTitle') : t('payFromSavingsTitle')"
+                        @click="item.paidFromSavings ? undoPayFromSavings(item) : startPayFromSavings(item)"
+                      >🏦</button>
+                      <button class="del-btn" @click="removeRow(expenses, item, saveExpenses)" :aria-label="t('deleteRow')"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button>
+                    </template>
+                  </td>
                 </tr>
               </TransitionGroup>
             </table>
@@ -295,7 +320,7 @@
               <TransitionGroup tag="tbody" name="row">
                 <tr v-for="item in savings" :key="keyFor(item)">
                   <td class="cell-name">
-                    <span class="cat-dot" :style="{ background: categoryColor(item.category, SAVINGS_CATEGORIES) }"></span>
+                    <span class="cat-dot" :style="{ background: categoryColor(item.category, allSavingsCategories) }"></span>
                     <input type="text" v-model="item.name" :title="item.name" @change="saveSavings">
                   </td>
                   <td class="amt-col" :data-label="t('amount')"><input type="number" v-model.number="item.amount" step="1" @change="saveSavings"></td>
@@ -307,8 +332,14 @@
                     </select>
                   </td>
                   <td class="cat-col" :data-label="t('category')">
-                    <select v-model="item.category" @change="saveSavings">
-                      <option v-for="cat in SAVINGS_CATEGORIES" :key="cat" :value="cat">{{ categoryLabel(cat) }}</option>
+                    <input
+                      v-if="addingCategoryFor === keyFor(item)" type="text" v-model="newCategoryName" autofocus
+                      class="month-picker-native" :placeholder="t('newCategoryPlaceholder')"
+                      @keyup.enter="confirmNewCategory(item, 'savings')" @blur="confirmNewCategory(item, 'savings')"
+                    >
+                    <select v-else :key="item.category" :value="item.category" @change="onCategorySelect($event, item, 'savings')">
+                      <option v-for="cat in savingsCategoryOptions" :key="cat" :value="cat">{{ categoryLabel(cat) }}</option>
+                      <option value="__add__">{{ t('addCategoryOption') }}</option>
                     </select>
                   </td>
                   <td class="del-col"><button class="del-btn" @click="removeRow(savings, item, saveSavings)" :aria-label="t('deleteRow')"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
@@ -453,6 +484,12 @@ const TRANSLATIONS = {
     fromMonth: 'od',
     oneTime: 'jednokratno',
     deleteRow: 'Obriši red',
+    payFromSavingsTitle: 'Plati iz štednje ovog meseca',
+    paidFromSavingsTitle: 'Plaćeno iz štednje — klikni da vratiš',
+    confirmBtn: 'Potvrdi',
+    cancelBtn: 'Otkaži',
+    addCategoryOption: '+ Dodaj kategoriju',
+    newCategoryPlaceholder: 'Naziv kategorije',
     addIncome: 'Dodaj primanje',
     addExpense: 'Dodaj trošak',
     addSaving: 'Dodaj stavku štednje',
@@ -542,6 +579,12 @@ const TRANSLATIONS = {
     fromMonth: 'from',
     oneTime: 'one-time',
     deleteRow: 'Delete row',
+    payFromSavingsTitle: 'Pay from savings this month',
+    paidFromSavingsTitle: 'Paid from savings — click to undo',
+    confirmBtn: 'Confirm',
+    cancelBtn: 'Cancel',
+    addCategoryOption: '+ Add category',
+    newCategoryPlaceholder: 'Category name',
     addIncome: 'Add income',
     addExpense: 'Add expense',
     addSaving: 'Add savings item',
@@ -598,6 +641,11 @@ function t(key) {
   return TRANSLATIONS[lang.value]?.[key] ?? key;
 }
 
+function aiErrorMessage(e, fallback) {
+  if (e?.response?.status === 429 && e.response.data?.error) return e.response.data.error;
+  return fallback;
+}
+
 const MONTH_NAMES_BY_LANG = {
   sr: ['Januar', 'Februar', 'Mart', 'April', 'Maj', 'Jun', 'Jul', 'Avgust', 'Septembar', 'Oktobar', 'Novembar', 'Decembar'],
   en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
@@ -651,6 +699,64 @@ function categoryColor(category, list) {
   return CATEGORY_COLORS[idx] ?? CATEGORY_COLORS[CATEGORY_COLORS.length - 1];
 }
 
+// Custom categories the user has added, and how often each category has ever
+// been picked — kept separate so adding/reordering by usage never reshuffles
+// an existing category's chart color (color lookup always uses insertion order).
+const customExpenseCategories = reactive([]);
+const customSavingsCategories = reactive([]);
+const categoryUsageExpense = reactive({});
+const categoryUsageSavings = reactive({});
+
+const allExpenseCategories = computed(() => [...EXPENSE_CATEGORIES, ...customExpenseCategories]);
+const allSavingsCategories = computed(() => [...SAVINGS_CATEGORIES, ...customSavingsCategories]);
+
+function sortByUsage(list, usageMap) {
+  return [...list].sort((a, b) => (usageMap[b] || 0) - (usageMap[a] || 0));
+}
+const expenseCategoryOptions = computed(() => sortByUsage(allExpenseCategories.value, categoryUsageExpense));
+const savingsCategoryOptions = computed(() => sortByUsage(allSavingsCategories.value, categoryUsageSavings));
+
+function persistCustomCategories(kind) {
+  if (kind === 'expense') persist('custom-categories-expense', customExpenseCategories);
+  else persist('custom-categories-savings', customSavingsCategories);
+}
+function bumpCategoryUsage(kind, category) {
+  const usage = kind === 'expense' ? categoryUsageExpense : categoryUsageSavings;
+  usage[category] = (usage[category] || 0) + 1;
+  persist(kind === 'expense' ? 'category-usage-expense' : 'category-usage-savings', usage);
+}
+
+const addingCategoryFor = ref(null);
+const newCategoryName = ref('');
+
+function onCategorySelect(event, item, kind) {
+  const value = event.target.value;
+  if (value === '__add__') {
+    newCategoryName.value = '';
+    addingCategoryFor.value = keyFor(item);
+    return;
+  }
+  item.category = value;
+  bumpCategoryUsage(kind, value);
+  if (kind === 'expense') saveExpenses(); else saveSavings();
+}
+function confirmNewCategory(item, kind) {
+  const name = newCategoryName.value.trim();
+  addingCategoryFor.value = null;
+  if (!name) return;
+
+  const list = kind === 'expense' ? customExpenseCategories : customSavingsCategories;
+  const existing = kind === 'expense' ? allExpenseCategories.value : allSavingsCategories.value;
+  if (!existing.includes(name)) {
+    list.push(name);
+    persistCustomCategories(kind);
+  }
+
+  item.category = name;
+  bumpCategoryUsage(kind, name);
+  if (kind === 'expense') saveExpenses(); else saveSavings();
+}
+
 const expenses = reactive(clone(defaultExpenses));
 const income = reactive(clone(defaultIncome));
 const savings = reactive(clone(defaultSavings));
@@ -689,6 +795,7 @@ async function loadState(period) {
 
   let needsExpensesIdBackfill = false;
   let needsIncomeIdBackfill = false;
+  let needsSavingsIdBackfill = false;
 
   try {
     const { data } = await axios.get('/api/budget', { params: { period } });
@@ -706,7 +813,16 @@ async function loadState(period) {
       }));
     }
     if (d['expense-rates']) Object.assign(rates, JSON.parse(d['expense-rates']));
-    if (d['savings-items']) replaceArray(savings, JSON.parse(d['savings-items']).map(it => ({ category: 'Ostalo', ...it })));
+    if (d['savings-items']) {
+      replaceArray(savings, JSON.parse(d['savings-items']).map(it => {
+        if (!it.id) needsSavingsIdBackfill = true;
+        return { id: it.id || generateId(), category: 'Ostalo', ...it };
+      }));
+    }
+    if (d['custom-categories-expense']) replaceArray(customExpenseCategories, JSON.parse(d['custom-categories-expense']));
+    if (d['custom-categories-savings']) replaceArray(customSavingsCategories, JSON.parse(d['custom-categories-savings']));
+    if (d['category-usage-expense']) Object.assign(categoryUsageExpense, JSON.parse(d['category-usage-expense']));
+    if (d['category-usage-savings']) Object.assign(categoryUsageSavings, JSON.parse(d['category-usage-savings']));
 
     if (data.is_new_period && data.previous_net !== null && data.template_period && !dismissedPeriods.has(period)) {
       bannerPreviousNet.value = data.previous_net;
@@ -719,6 +835,7 @@ async function loadState(period) {
     // freshly-assigned ones now so future edits mirror correctly.
     if (needsExpensesIdBackfill) saveExpenses();
     if (needsIncomeIdBackfill) saveIncome();
+    if (needsSavingsIdBackfill) saveSavings();
   } catch (e) {
     // nema sacuvanih podataka jos — ostaju podrazumevane vrednosti
   } finally {
@@ -762,6 +879,51 @@ function removeRow(arr, item, save) {
   save();
 }
 
+const payingFromSavingsFor = ref(null);
+const payFromSavingsChoice = ref(null);
+
+function startPayFromSavings(item) {
+  if (!savings.length) return;
+  if (savings.length === 1) {
+    confirmPayFromSavings(item, savings[0].id);
+    return;
+  }
+  payFromSavingsChoice.value = savings[0].id;
+  payingFromSavingsFor.value = keyFor(item);
+}
+function cancelPayFromSavings() {
+  payingFromSavingsFor.value = null;
+}
+function confirmPayFromSavings(item, savingsId) {
+  const savingsItem = savings.find(s => s.id === savingsId);
+  if (!savingsItem) return;
+
+  const rsdAmount = toRSD(item.amount, item.currency);
+  const deducted = fromRSD(rsdAmount, savingsItem.currency);
+  savingsItem.amount = Math.round((savingsItem.amount - deducted) * 100) / 100;
+
+  item.paidFromSavings = { savingsId, amount: item.amount, currency: item.currency };
+
+  saveSavings();
+  saveExpenses();
+  payingFromSavingsFor.value = null;
+}
+function undoPayFromSavings(item) {
+  const info = item.paidFromSavings;
+  if (!info) return;
+
+  const savingsItem = savings.find(s => s.id === info.savingsId);
+  if (savingsItem) {
+    const rsdAmount = toRSD(info.amount, info.currency);
+    const restored = fromRSD(rsdAmount, savingsItem.currency);
+    savingsItem.amount = Math.round((savingsItem.amount + restored) * 100) / 100;
+    saveSavings();
+  }
+
+  item.paidFromSavings = null;
+  saveExpenses();
+}
+
 function resetAll() {
   replaceArray(expenses, clone(defaultExpenses));
   replaceArray(income, clone(defaultIncome));
@@ -774,6 +936,11 @@ function toRSD(amount, currency) {
   if (currency === 'USD') return amount * rates.usd;
   if (currency === 'EUR') return amount * rates.eur;
   return amount;
+}
+function fromRSD(amountRsd, currency) {
+  if (currency === 'USD') return rates.usd ? amountRsd / rates.usd : 0;
+  if (currency === 'EUR') return rates.eur ? amountRsd / rates.eur : 0;
+  return amountRsd;
 }
 function fmt(n) { return Math.round(n).toLocaleString('sr-RS'); }
 function fmt2(n) { return n.toLocaleString('sr-RS', { maximumFractionDigits: 2 }); }
@@ -882,8 +1049,8 @@ const visibleIncome = computed(() => {
   return showOneTimeIncome.value ? [...recurring, ...income.filter(it => it.freq === 0)] : recurring;
 });
 
-const expThis = computed(() => expenses.reduce((sum, it) => isExpenseActive(it) ? sum + toRSD(it.amount, it.currency) : sum, 0));
-const recurringExpTotal = computed(() => expenses.reduce((sum, it) => (isExpenseActive(it) && it.freq !== 0) ? sum + toRSD(it.amount, it.currency) : sum, 0));
+const expThis = computed(() => expenses.reduce((sum, it) => (isExpenseActive(it) && !it.paidFromSavings) ? sum + toRSD(it.amount, it.currency) : sum, 0));
+const recurringExpTotal = computed(() => expenses.reduce((sum, it) => (isExpenseActive(it) && it.freq !== 0 && !it.paidFromSavings) ? sum + toRSD(it.amount, it.currency) : sum, 0));
 const incThis = computed(() => income.reduce((sum, it) => isIncomeActive(it) ? sum + toRSD(it.amount, it.currency) : sum, 0));
 const expAvg = computed(() => expenses.reduce((sum, it) => {
   if (!it.active || (it.endPeriod && currentPeriod.value > it.endPeriod)) return sum;
@@ -915,7 +1082,7 @@ const categoryBreakdown = computed(() => {
       category,
       amount,
       pct: (amount / total) * 100,
-      color: categoryColor(category, EXPENSE_CATEGORIES),
+      color: categoryColor(category, allExpenseCategories.value),
     }))
     .sort((a, b) => b.amount - a.amount);
 });
@@ -1053,8 +1220,8 @@ async function sendVoiceMessage(blob) {
     const { data } = await axios.post('/api/budget/voice', {
       audio: base64,
       mime_type: mimeType,
-      expense_categories: EXPENSE_CATEGORIES,
-      savings_categories: SAVINGS_CATEGORIES,
+      expense_categories: allExpenseCategories.value,
+      savings_categories: allSavingsCategories.value,
     });
     chatLog.pop();
 
@@ -1075,7 +1242,7 @@ async function sendVoiceMessage(blob) {
     }
   } catch (e) {
     chatLog.pop();
-    chatLog.push({ role: 'assistant', text: t('chatError') });
+    chatLog.push({ role: 'assistant', text: aiErrorMessage(e, t('chatError')) });
   } finally {
     chatSending.value = false;
     scrollChatToBottom();
@@ -1095,8 +1262,8 @@ async function sendChatMessage() {
   try {
     const { data } = await axios.post('/api/budget/chat', {
       message: text,
-      expense_categories: EXPENSE_CATEGORIES,
-      savings_categories: SAVINGS_CATEGORIES,
+      expense_categories: allExpenseCategories.value,
+      savings_categories: allSavingsCategories.value,
     });
     chatLog.pop();
 
@@ -1117,7 +1284,7 @@ async function sendChatMessage() {
     }
   } catch (e) {
     chatLog.pop();
-    chatLog.push({ role: 'assistant', text: t('chatError') });
+    chatLog.push({ role: 'assistant', text: aiErrorMessage(e, t('chatError')) });
   } finally {
     chatSending.value = false;
     scrollChatToBottom();
@@ -1202,7 +1369,7 @@ async function onReceiptSelected(event) {
     const { data } = await axios.post('/api/budget/receipt', {
       image: base64,
       mime_type: 'image/jpeg',
-      expense_categories: EXPENSE_CATEGORIES,
+      expense_categories: allExpenseCategories.value,
     });
     chatLog.pop();
 
@@ -1219,7 +1386,7 @@ async function onReceiptSelected(event) {
     }
   } catch (e) {
     chatLog.pop();
-    chatLog.push({ role: 'assistant', text: t('receiptError') });
+    chatLog.push({ role: 'assistant', text: aiErrorMessage(e, t('receiptError')) });
   } finally {
     scanningReceipt.value = false;
     scrollChatToBottom();
@@ -1249,7 +1416,7 @@ async function analyzeMonth() {
     });
     analysisText.value = data.tip;
   } catch (e) {
-    analysisError.value = t('analysisUnavailable');
+    analysisError.value = aiErrorMessage(e, t('analysisUnavailable'));
   } finally {
     analyzing.value = false;
   }
@@ -1335,7 +1502,7 @@ const yearChart = computed(() => {
       : { period, income: 0, expense: 0, net: 0, categories: {}, hasData: false };
   });
 
-  const categoriesUsed = EXPENSE_CATEGORIES.filter(cat => months.some(m => (m.categories[cat] || 0) > 0));
+  const categoriesUsed = allExpenseCategories.value.filter(cat => months.some(m => (m.categories[cat] || 0) > 0));
 
   const maxVal = Math.max(1, ...dataMonths.map(m => Math.max(m.income, m.expense)));
   const stepX = (width - padding * 2) / 11;
@@ -1365,7 +1532,7 @@ const yearChart = computed(() => {
         y: topY,
         width: barWidth,
         height: Math.max(0.5, bottomY - topY),
-        color: categoryColor(cat, EXPENSE_CATEGORIES),
+        color: categoryColor(cat, allExpenseCategories.value),
       });
       running += value;
     });
@@ -1377,7 +1544,7 @@ const yearChart = computed(() => {
     incomeArea: areaClose(incomePoints),
     tooltipCategories: (idx) => Object.entries(months[idx].categories)
       .filter(([, amount]) => amount > 0)
-      .map(([category, amount]) => ({ category, amount, color: categoryColor(category, EXPENSE_CATEGORIES) }))
+      .map(([category, amount]) => ({ category, amount, color: categoryColor(category, allExpenseCategories.value) }))
       .sort((a, b) => b.amount - a.amount),
   };
 });
@@ -1589,7 +1756,14 @@ function switchLangUrl(target) {
 .end-col{ width:118px; }
 .cat-col{ width:110px; }
 .chk-col{ width:36px; text-align:center; }
-.del-col{ width:26px; text-align:center; }
+.del-col{ width:52px; text-align:center; white-space:nowrap; }
+.savings-btn{ opacity:0.5; font-size:13px; }
+.savings-btn.active{ opacity:1; }
+.savings-pick{ display:inline-flex; align-items:center; gap:2px; }
+.savings-pick select{
+  font-family:'Inter',sans-serif; font-size:11px; color:var(--ink); background:transparent;
+  border:1px solid var(--border); border-radius:4px; max-width:76px; padding:2px;
+}
 
 .month-picker-native{
   font-family:'Inter',sans-serif; font-size:12.5px; color:var(--ink); color-scheme:light dark;
