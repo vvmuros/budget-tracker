@@ -58,7 +58,7 @@ class BudgetController extends Controller
                 'income-items' => $templateValues['income-items'],
                 'expense-items' => $templateValues['expense-items'],
                 'expense-rates' => $templateValues['expense-rates'] ?? '{}',
-            ]));
+            ]), $templatePeriod);
         }
 
         return response()->json([
@@ -96,9 +96,9 @@ class BudgetController extends Controller
 
             $months[] = [
                 'period' => $cursor,
-                'income' => $this->sumActiveItems($income['value'] ?? '[]', $ratesArr),
-                'expense' => $this->sumActiveItems($expense['value'] ?? '[]', $ratesArr),
-                'categories' => $this->sumByCategory($expense['value'] ?? '[]', $ratesArr),
+                'income' => $this->sumActiveItems($income['value'] ?? '[]', $ratesArr, $cursor),
+                'expense' => $this->sumActiveItems($expense['value'] ?? '[]', $ratesArr, $cursor),
+                'categories' => $this->sumByCategory($expense['value'] ?? '[]', $ratesArr, $cursor),
             ];
 
             $cursor = $this->incrementPeriod($cursor);
@@ -465,30 +465,30 @@ class BudgetController extends Controller
         return response()->json(['tip' => trim($tip)]);
     }
 
-    private function calculateNet(Collection $rows): ?float
+    private function calculateNet(Collection $rows, ?string $period = null): ?float
     {
         $rates = json_decode($rows->get('expense-rates', '{}'), true) ?: ['usd' => 0, 'eur' => 0];
 
-        return $this->sumActiveItems($rows->get('income-items', '[]'), $rates)
-            - $this->sumActiveItems($rows->get('expense-items', '[]'), $rates);
+        return $this->sumActiveItems($rows->get('income-items', '[]'), $rates, $period)
+            - $this->sumActiveItems($rows->get('expense-items', '[]'), $rates, $period);
     }
 
-    private function sumActiveItems(string $json, array $rates): float
+    private function sumActiveItems(string $json, array $rates, ?string $period = null): float
     {
         $items = json_decode($json, true) ?: [];
 
         return collect($items)
-            ->filter(fn ($it) => $it['active'] ?? false)
+            ->filter(fn ($it) => $this->isItemActive($it, $period))
             ->sum(fn ($it) => $this->toRsd($it['amount'] ?? 0, $it['currency'] ?? 'RSD', $rates));
     }
 
-    private function sumByCategory(string $json, array $rates): array
+    private function sumByCategory(string $json, array $rates, ?string $period = null): array
     {
         $items = json_decode($json, true) ?: [];
 
         $totals = [];
         foreach ($items as $it) {
-            if (! ($it['active'] ?? false)) {
+            if (! $this->isItemActive($it, $period)) {
                 continue;
             }
             $cat = $it['category'] ?? 'Ostalo';
@@ -496,6 +496,23 @@ class BudgetController extends Controller
         }
 
         return $totals;
+    }
+
+    /**
+     * An item counts as active if its own "active" flag is on, and — for
+     * expense items with an end month — the given period hasn't passed it yet.
+     */
+    private function isItemActive(array $item, ?string $period): bool
+    {
+        if (! ($item['active'] ?? false)) {
+            return false;
+        }
+
+        if ($period !== null && ! empty($item['endPeriod']) && $period > $item['endPeriod']) {
+            return false;
+        }
+
+        return true;
     }
 
     private function toRsd(float $amount, string $currency, array $rates): float

@@ -63,4 +63,35 @@ class BudgetYearlyTest extends TestCase
         $response->assertOk();
         $this->assertSame([], $response->json('months'));
     }
+
+    public function test_expense_with_an_end_month_stops_counting_after_it_passes(): void
+    {
+        $this->travelTo('2026-09-15');
+
+        $user = User::factory()->create();
+
+        BudgetData::create([
+            'user_id' => $user->id,
+            'key' => 'income-items',
+            'period' => '2026-07',
+            'value' => json_encode([
+                ['name' => 'Plata', 'amount' => 80000, 'currency' => 'RSD', 'freq' => 1, 'active' => true],
+            ]),
+        ]);
+        BudgetData::create([
+            'user_id' => $user->id,
+            'key' => 'expense-items',
+            'period' => '2026-07',
+            'value' => json_encode([
+                ['name' => 'Kredit', 'amount' => 5000, 'currency' => 'RSD', 'freq' => 1, 'active' => true, 'endPeriod' => '2026-08'],
+            ]),
+        ]);
+
+        $response = $this->actingAs($user)->getJson('/api/budget/yearly');
+        $months = collect($response->json('months'))->keyBy('period');
+
+        $this->assertEquals(5000, $months['2026-07']['expense'], 'Loan is within its end month');
+        $this->assertEquals(5000, $months['2026-08']['expense'], 'Loan ends in August, should still count in August');
+        $this->assertEquals(0, $months['2026-09']['expense'], 'Loan ended in August, should not count in September');
+    }
 }
