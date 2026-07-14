@@ -35,7 +35,7 @@
             </div>
           </div>
           <form class="chat-input" @submit.prevent="sendChatMessage">
-            <input type="text" v-model="chatInput" :placeholder="t('chatPlaceholder')" :disabled="chatSending || isListening">
+            <input ref="chatInputField" type="text" v-model="chatInput" :placeholder="t('chatPlaceholder')" :disabled="chatSending || isListening">
             <button
               v-if="voiceSupported" type="button" class="mic-btn" :class="{ listening: isListening }"
               :disabled="chatSending" @click="toggleVoiceInput" :aria-label="t('voiceLabel')"
@@ -865,6 +865,15 @@ const chatLog = reactive([]);
 const chatInput = ref('');
 const chatSending = ref(false);
 const chatLogEl = ref(null);
+const chatInputField = ref(null);
+
+onMounted(() => {
+  if (new URLSearchParams(window.location.search).get('quick') !== '1') return;
+  nextTick(() => chatInputField.value?.focus());
+  const url = new URL(window.location.href);
+  url.searchParams.delete('quick');
+  window.history.replaceState({}, '', url);
+});
 
 const CHAT_ACTION_LABELS = computed(() => ({
   add_expense: t('chatActionExpense'),
