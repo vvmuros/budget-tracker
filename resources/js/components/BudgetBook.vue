@@ -167,7 +167,7 @@
                 </tr>
               </thead>
               <TransitionGroup tag="tbody" name="row">
-                <tr v-for="item in visibleIncome" :key="keyFor(item)" :class="{ inactive: !item.active }">
+                <tr v-for="item in visibleIncome" :key="keyFor(item)" :class="{ inactive: !isIncomeActive(item) }">
                   <td class="cell-name"><input type="text" v-model="item.name" :title="item.name" @change="saveIncome"></td>
                   <td class="amt-col" :data-label="t('amount')"><input type="number" v-model.number="item.amount" step="1" @change="saveIncome"></td>
                   <td class="cur-col" :data-label="t('currency')">
@@ -178,12 +178,18 @@
                     </select>
                   </td>
                   <td class="freq-col" :data-label="t('frequency')">
-                    <select v-model.number="item.freq" @change="onIncomeFreqChange(item)">
-                      <option :value="1">{{ t('monthly') }}</option>
-                      <option :value="2">{{ t('every2Months') }}</option>
-                      <option :value="3">{{ t('every3Months') }}</option>
-                      <option :value="0">{{ t('oneTime') }}</option>
+                    <select :value="freqMode(item)" @change="setFreqMode(item, $event.target.value, onIncomeFreqChange)">
+                      <option value="monthly">{{ t('monthly') }}</option>
+                      <option value="custom">{{ t('customInterval') }}</option>
+                      <option value="onetime">{{ t('oneTime') }}</option>
                     </select>
+                    <div v-if="item.freq > 1" class="freq-custom">
+                      <span>{{ t('every') }}</span>
+                      <input type="number" min="2" max="24" v-model.number="item.freq" @change="saveIncome" class="freq-interval-input">
+                      <span>{{ t('monthsUnit') }}</span>
+                      <span>{{ t('fromMonth') }}</span>
+                      <input type="month" v-model="item.dueAnchor" @change="saveIncome" class="freq-anchor-input">
+                    </div>
                   </td>
                   <td class="chk-col" :data-label="t('active')"><input type="checkbox" v-model="item.active" @change="saveIncome"></td>
                   <td class="del-col"><button class="del-btn" @click="removeRow(income, item, saveIncome)" :aria-label="t('deleteRow')"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
@@ -224,12 +230,18 @@
                     </select>
                   </td>
                   <td class="freq-col" :data-label="t('frequency')">
-                    <select v-model.number="item.freq" @change="onExpenseFreqChange(item)">
-                      <option :value="1">{{ t('monthly') }}</option>
-                      <option :value="2">{{ t('every2Months') }}</option>
-                      <option :value="3">{{ t('every3Months') }}</option>
-                      <option :value="0">{{ t('oneTime') }}</option>
+                    <select :value="freqMode(item)" @change="setFreqMode(item, $event.target.value, onExpenseFreqChange)">
+                      <option value="monthly">{{ t('monthly') }}</option>
+                      <option value="custom">{{ t('customInterval') }}</option>
+                      <option value="onetime">{{ t('oneTime') }}</option>
                     </select>
+                    <div v-if="item.freq > 1" class="freq-custom">
+                      <span>{{ t('every') }}</span>
+                      <input type="number" min="2" max="24" v-model.number="item.freq" @change="saveExpenses" class="freq-interval-input">
+                      <span>{{ t('monthsUnit') }}</span>
+                      <span>{{ t('fromMonth') }}</span>
+                      <input type="month" v-model="item.dueAnchor" @change="saveExpenses" class="freq-anchor-input">
+                    </div>
                   </td>
                   <td class="end-col" :data-label="t('untilMonth')">
                     <input
@@ -435,8 +447,10 @@ const TRANSLATIONS = {
     category: 'Kategorija',
     active: 'Akt.',
     monthly: 'mesečno',
-    every2Months: 'na 2 meseca',
-    every3Months: 'na 3 meseca',
+    customInterval: 'na X meseci...',
+    every: 'svakih',
+    monthsUnit: 'meseci',
+    fromMonth: 'od',
     oneTime: 'jednokratno',
     deleteRow: 'Obriši red',
     addIncome: 'Dodaj primanje',
@@ -522,8 +536,10 @@ const TRANSLATIONS = {
     category: 'Category',
     active: 'Active',
     monthly: 'monthly',
-    every2Months: 'every 2 months',
-    every3Months: 'every 3 months',
+    customInterval: 'every X months...',
+    every: 'every',
+    monthsUnit: 'months',
+    fromMonth: 'from',
     oneTime: 'one-time',
     deleteRow: 'Delete row',
     addIncome: 'Add income',
@@ -763,8 +779,45 @@ function fmt(n) { return Math.round(n).toLocaleString('sr-RS'); }
 function fmt2(n) { return n.toLocaleString('sr-RS', { maximumFractionDigits: 2 }); }
 function signed(n) { return (n >= 0 ? '+' : '') + fmt(n); }
 
+function monthsBetween(fromPeriod, toPeriod) {
+  const [fy, fm] = fromPeriod.split('-').map(Number);
+  const [ty, tm] = toPeriod.split('-').map(Number);
+  return (ty - fy) * 12 + (tm - fm);
+}
+function isDueThisPeriod(item, period) {
+  if (!item.freq || item.freq <= 1) return true;
+  if (!item.dueAnchor) return true;
+  const diff = monthsBetween(item.dueAnchor, period);
+  return diff >= 0 && diff % item.freq === 0;
+}
 function isExpenseActive(item) {
-  return item.active && (!item.endPeriod || currentPeriod.value <= item.endPeriod);
+  return item.active
+    && (!item.endPeriod || currentPeriod.value <= item.endPeriod)
+    && isDueThisPeriod(item, currentPeriod.value);
+}
+function isIncomeActive(item) {
+  return item.active
+    && (!item.endPeriod || currentPeriod.value <= item.endPeriod)
+    && isDueThisPeriod(item, currentPeriod.value);
+}
+
+function freqMode(item) {
+  if (item.freq === 0) return 'onetime';
+  if (item.freq === 1) return 'monthly';
+  return 'custom';
+}
+function setFreqMode(item, mode, onChange) {
+  if (mode === 'monthly') {
+    item.freq = 1;
+    item.dueAnchor = null;
+  } else if (mode === 'onetime') {
+    item.freq = 0;
+    item.dueAnchor = null;
+  } else if (mode === 'custom') {
+    item.freq = item.freq > 1 ? item.freq : 2;
+    if (!item.dueAnchor) item.dueAnchor = currentPeriod.value;
+  }
+  onChange(item);
 }
 
 const GREETING_TEMPLATES = {
@@ -831,14 +884,14 @@ const visibleIncome = computed(() => {
 
 const expThis = computed(() => expenses.reduce((sum, it) => isExpenseActive(it) ? sum + toRSD(it.amount, it.currency) : sum, 0));
 const recurringExpTotal = computed(() => expenses.reduce((sum, it) => (isExpenseActive(it) && it.freq !== 0) ? sum + toRSD(it.amount, it.currency) : sum, 0));
-const incThis = computed(() => income.reduce((sum, it) => it.active ? sum + toRSD(it.amount, it.currency) : sum, 0));
+const incThis = computed(() => income.reduce((sum, it) => isIncomeActive(it) ? sum + toRSD(it.amount, it.currency) : sum, 0));
 const expAvg = computed(() => expenses.reduce((sum, it) => {
-  if (!isExpenseActive(it)) return sum;
+  if (!it.active || (it.endPeriod && currentPeriod.value > it.endPeriod)) return sum;
   const r = toRSD(it.amount, it.currency);
   return sum + (it.freq > 0 ? r / it.freq : r);
 }, 0));
 const incAvg = computed(() => income.reduce((sum, it) => {
-  if (!it.active) return sum;
+  if (!it.active || (it.endPeriod && currentPeriod.value > it.endPeriod)) return sum;
   const r = toRSD(it.amount, it.currency);
   return sum + (it.freq > 0 ? r / it.freq : r);
 }, 0));
@@ -915,9 +968,11 @@ const CHAT_ACTION_LABELS = computed(() => ({
   add_income: t('chatActionIncome'),
   add_saving: t('chatActionSaving'),
 }));
-const FREQ_LABELS = computed(() => ({
-  0: t('oneTime'), 1: t('monthly'), 2: t('every2Months'), 3: t('every3Months'),
-}));
+function freqLabel(freq) {
+  if (freq === 0) return t('oneTime');
+  if (freq === 1) return t('monthly');
+  return `${t('every')} ${freq} ${t('monthsUnit')}`;
+}
 
 function scrollChatToBottom() {
   nextTick(() => {
@@ -1008,7 +1063,7 @@ async function sendVoiceMessage(blob) {
       const currency = data.currency || 'RSD';
       const freq = data.freq ?? 1;
       const category = data.category || 'Ostalo';
-      const freqText = data.action === 'add_saving' ? '' : `, ${FREQ_LABELS.value[freq] ?? t('monthly')}`;
+      const freqText = data.action === 'add_saving' ? '' : `, ${freqLabel(freq)}`;
       const catText = data.action === 'add_income' ? '' : `, ${t('categoryWord')} ${categoryLabel(category)}`;
       chatLog.push({
         role: 'assistant',
@@ -1050,7 +1105,7 @@ async function sendChatMessage() {
       const currency = data.currency || 'RSD';
       const freq = data.freq ?? 1;
       const category = data.category || 'Ostalo';
-      const freqText = data.action === 'add_saving' ? '' : `, ${FREQ_LABELS.value[freq] ?? t('monthly')}`;
+      const freqText = data.action === 'add_saving' ? '' : `, ${freqLabel(freq)}`;
       const catText = data.action === 'add_income' ? '' : `, ${t('categoryWord')} ${categoryLabel(category)}`;
       chatLog.push({
         role: 'assistant',
@@ -1519,7 +1574,18 @@ function switchLangUrl(target) {
 
 .amt-col{ width:90px; }
 .cur-col{ width:64px; }
-.freq-col{ width:120px; }
+.freq-col{ width:150px; }
+.freq-custom{ display:flex; flex-wrap:wrap; align-items:center; gap:3px; margin-top:4px; font-size:11px; color:var(--ink-light); }
+.freq-interval-input{
+  width:32px; font-family:'Inter',sans-serif; font-size:12px; color:var(--ink);
+  background:transparent; border:none; border-bottom:1px solid var(--border); padding:2px;
+}
+.freq-interval-input:focus{ outline:none; border-bottom:1px solid var(--gilt); }
+.freq-anchor-input{
+  font-family:'Inter',sans-serif; font-size:11px; color:var(--ink); color-scheme:light dark;
+  background:transparent; border:none; border-bottom:1px solid var(--border); padding:2px; max-width:100px;
+}
+.freq-anchor-input:focus{ outline:none; border-bottom:1px solid var(--gilt); }
 .end-col{ width:118px; }
 .cat-col{ width:110px; }
 .chk-col{ width:36px; text-align:center; }

@@ -149,7 +149,7 @@ class BudgetController extends Controller
             return;
         }
 
-        $sharedFields = ['name', 'amount', 'currency', 'freq', 'category', 'endPeriod'];
+        $sharedFields = ['name', 'amount', 'currency', 'freq', 'category', 'endPeriod', 'dueAnchor'];
         $recurringById = [];
         $recurringByName = [];
 
@@ -583,7 +583,42 @@ class BudgetController extends Controller
             return false;
         }
 
+        if ($period !== null && ! $this->isDueInPeriod($item, $period)) {
+            return false;
+        }
+
         return true;
+    }
+
+    /**
+     * For a custom "every N months" item (freq > 1) with a due-month anchor,
+     * only the months that are an exact multiple of N away from the anchor
+     * actually count — e.g. paid in July, every 2 months, means September and
+     * November are due but August and October aren't.
+     */
+    private function isDueInPeriod(array $item, string $period): bool
+    {
+        $freq = (int) ($item['freq'] ?? 1);
+        if ($freq <= 1) {
+            return true;
+        }
+
+        $anchor = $item['dueAnchor'] ?? null;
+        if (! $anchor) {
+            return true;
+        }
+
+        $diff = $this->monthsBetweenPeriods($anchor, $period);
+
+        return $diff >= 0 && $diff % $freq === 0;
+    }
+
+    private function monthsBetweenPeriods(string $from, string $to): int
+    {
+        [$fy, $fm] = array_map('intval', explode('-', $from));
+        [$ty, $tm] = array_map('intval', explode('-', $to));
+
+        return ($ty - $fy) * 12 + ($tm - $fm);
     }
 
     private function toRsd(float $amount, string $currency, array $rates): float
