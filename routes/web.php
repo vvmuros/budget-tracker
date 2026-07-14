@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BudgetController;
+use App\Http\Controllers\PushController;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Route;
 
@@ -48,4 +49,15 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/api/budget/voice', [BudgetController::class, 'voice'])->middleware('throttle:15,1')->name('budget.voice');
     Route::post('/api/budget/analyze', [BudgetController::class, 'analyze'])->middleware('throttle:6,1')->name('budget.analyze');
     Route::post('/api/budget/receipt', [BudgetController::class, 'receipt'])->middleware('throttle:6,1')->name('budget.receipt');
+
+    Route::get('/api/push/public-key', [PushController::class, 'publicKey'])->name('push.publicKey');
+    Route::post('/api/push/subscribe', [PushController::class, 'subscribe'])->name('push.subscribe');
+    Route::post('/api/push/unsubscribe', [PushController::class, 'unsubscribe'])->name('push.unsubscribe');
+    Route::post('/api/push/test', [PushController::class, 'sendTest'])->middleware('throttle:6,1')->name('push.test');
 });
+
+// Hit once a month (e.g. by a free external cron-ping service) with
+// ?token=CRON_SECRET to nudge every subscribed user about last month's
+// leftover. Deliberately outside the 'auth' group — it's not a user request,
+// it's the server telling itself to fan out reminders to everyone.
+Route::post('/cron/monthly-reminder', [PushController::class, 'sendMonthlyReminders'])->name('cron.monthlyReminder');

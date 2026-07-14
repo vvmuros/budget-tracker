@@ -392,6 +392,12 @@
             <div class="foot-note">
               {{ t('footNote') }}
               &nbsp;·&nbsp; <button class="reset-link" @click="resetAll">{{ t('resetDefaults') }}</button>
+              <template v-if="pushSupported">
+                &nbsp;·&nbsp; <button class="reset-link" @click="togglePushReminders">{{ pushEnabled ? t('disableReminders') : t('enableReminders') }}</button>
+                <template v-if="pushEnabled">
+                  &nbsp;·&nbsp; <button class="reset-link" @click="sendTestReminder">{{ t('sendTestReminder') }}</button>
+                </template>
+              </template>
             </div>
           </div>
         </Transition>
@@ -479,6 +485,9 @@ const TRANSLATIONS = {
     totalSavings: 'Ukupna ušteđevina:',
     footNote: 'Isključi "Akt." za stavke koje ovog meseca ne dospevaju.',
     resetDefaults: 'vrati na početne vrednosti',
+    enableReminders: 'uključi podsetnik za štednju',
+    disableReminders: 'isključi podsetnik',
+    sendTestReminder: 'pošalji probno obaveštenje',
     newIncomeName: 'Novo primanje',
     newExpenseName: 'Nova stavka',
     newSavingName: 'Nova stavka',
@@ -568,6 +577,9 @@ const TRANSLATIONS = {
     totalSavings: 'Total savings:',
     footNote: 'Turn off "Active" for items not due this month.',
     resetDefaults: 'reset to defaults',
+    enableReminders: 'enable savings reminder',
+    disableReminders: 'disable reminder',
+    sendTestReminder: 'send a test notification',
     newIncomeName: 'New income',
     newExpenseName: 'New item',
     newSavingName: 'New item',
@@ -939,6 +951,58 @@ watch(savTotal, () => triggerFlash('savings'));
 
 watch(currentPeriod, (period) => loadState(period));
 onMounted(() => loadState(currentPeriod.value));
+
+const pushSupported = !!(window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
+const pushEnabled = ref(false);
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+async function checkPushSubscription() {
+  if (!pushSupported) return;
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription();
+  pushEnabled.value = !!sub;
+}
+
+async function togglePushReminders() {
+  if (!pushSupported) return;
+  const reg = await navigator.serviceWorker.ready;
+
+  if (pushEnabled.value) {
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await axios.post('/api/push/unsubscribe', { endpoint: sub.endpoint });
+      await sub.unsubscribe();
+    }
+    pushEnabled.value = false;
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') return;
+
+  const { data } = await axios.get('/api/push/public-key');
+  if (!data.key) return;
+
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(data.key),
+  });
+
+  await axios.post('/api/push/subscribe', sub.toJSON());
+  pushEnabled.value = true;
+}
+
+async function sendTestReminder() {
+  await axios.post('/api/push/test');
+}
+
+onMounted(() => { checkPushSubscription(); });
 
 const isDark = ref(document.documentElement.getAttribute('data-theme') === 'dark');
 
