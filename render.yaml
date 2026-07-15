@@ -28,7 +28,7 @@ services:
       - key: DB_PASSWORD
         sync: false
       - key: DB_SSLMODE
-        value: prefer
+        value: require
       - key: SESSION_DRIVER
         value: file
       - key: LOG_CHANNEL
