@@ -1,0 +1,10 @@
+  services:
+    app:
+      build:
+        context: .
+        dockerfile: Dockerfile
+      env_file:
+        - /home/uros/apps/budget-tracker.env
+      ports:
+        - "127.0.0.1:18080:10000"
+      restart: unless-stopped

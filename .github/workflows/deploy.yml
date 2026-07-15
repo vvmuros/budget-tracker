@@ -1,0 +1,23 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, laptop]
+    steps:
+      - name: Pull latest code
+        run: |
+          cd /home/uros/apps/budget-tracker
+          git fetch origin main
+          git reset --hard origin/main
+
+      - name: Build and restart container
+        run: |
+          cd /home/uros/apps/budget-tracker
+          docker compose up -d --build
+
+      - name: Prune old images
+        run: docker image prune -f
