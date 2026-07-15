@@ -253,10 +253,15 @@
                     </button>
                   </td>
                   <td class="cat-col" :data-label="t('category')">
+                    <div v-if="categorySuggestion && categorySuggestion.itemKey === keyFor(item)" class="cat-suggest">
+                      <span>{{ t('didYouMean') }} {{ categoryLabel(categorySuggestion.match) }}?</span>
+                      <button class="del-btn" type="button" @click="acceptCategorySuggestion" :title="t('useExistingCategoryTitle')">✓</button>
+                      <button class="del-btn" type="button" @click="rejectCategorySuggestion" :title="t('createNewCategoryTitle')">✕</button>
+                    </div>
                     <input
-                      v-if="addingCategoryFor === keyFor(item)" type="text" v-model="newCategoryName" autofocus
+                      v-else-if="addingCategoryFor === keyFor(item)" type="text" v-model="newCategoryName" autofocus
                       class="month-picker-native" :placeholder="t('newCategoryPlaceholder')"
-                      @keyup.enter="confirmNewCategory(item, 'expense')" @blur="confirmNewCategory(item, 'expense')"
+                      @keyup.enter="$event.target.blur()" @change="confirmNewCategory(item, 'expense')" @blur="addingCategoryFor = null"
                     >
                     <select v-else :key="item.category" :value="item.category" @change="onCategorySelect($event, item, 'expense')">
                       <option v-for="cat in expenseCategoryOptions" :key="cat" :value="cat">{{ categoryLabel(cat) }}</option>
@@ -332,10 +337,15 @@
                     </select>
                   </td>
                   <td class="cat-col" :data-label="t('category')">
+                    <div v-if="categorySuggestion && categorySuggestion.itemKey === keyFor(item)" class="cat-suggest">
+                      <span>{{ t('didYouMean') }} {{ categoryLabel(categorySuggestion.match) }}?</span>
+                      <button class="del-btn" type="button" @click="acceptCategorySuggestion" :title="t('useExistingCategoryTitle')">✓</button>
+                      <button class="del-btn" type="button" @click="rejectCategorySuggestion" :title="t('createNewCategoryTitle')">✕</button>
+                    </div>
                     <input
-                      v-if="addingCategoryFor === keyFor(item)" type="text" v-model="newCategoryName" autofocus
+                      v-else-if="addingCategoryFor === keyFor(item)" type="text" v-model="newCategoryName" autofocus
                       class="month-picker-native" :placeholder="t('newCategoryPlaceholder')"
-                      @keyup.enter="confirmNewCategory(item, 'savings')" @blur="confirmNewCategory(item, 'savings')"
+                      @keyup.enter="$event.target.blur()" @change="confirmNewCategory(item, 'savings')" @blur="addingCategoryFor = null"
                     >
                     <select v-else :key="item.category" :value="item.category" @change="onCategorySelect($event, item, 'savings')">
                       <option v-for="cat in savingsCategoryOptions" :key="cat" :value="cat">{{ categoryLabel(cat) }}</option>
@@ -490,6 +500,9 @@ const TRANSLATIONS = {
     cancelBtn: 'Otkaži',
     addCategoryOption: '+ Dodaj kategoriju',
     newCategoryPlaceholder: 'Naziv kategorije',
+    didYouMean: 'Misliš na',
+    useExistingCategoryTitle: 'Da, koristi tu kategoriju',
+    createNewCategoryTitle: 'Ne, napravi novu kategoriju',
     addIncome: 'Dodaj primanje',
     addExpense: 'Dodaj trošak',
     addSaving: 'Dodaj stavku štednje',
@@ -585,6 +598,9 @@ const TRANSLATIONS = {
     cancelBtn: 'Cancel',
     addCategoryOption: '+ Add category',
     newCategoryPlaceholder: 'Category name',
+    didYouMean: 'Did you mean',
+    useExistingCategoryTitle: 'Yes, use that category',
+    createNewCategoryTitle: 'No, create a new category',
     addIncome: 'Add income',
     addExpense: 'Add expense',
     addSaving: 'Add savings item',
@@ -740,21 +756,65 @@ function onCategorySelect(event, item, kind) {
   bumpCategoryUsage(kind, value);
   if (kind === 'expense') saveExpenses(); else saveSavings();
 }
+function normalizeCategory(s) {
+  return (s || '').toString().trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+// Same word typed without diacritics ("racuni" vs "Računi") is treated as an
+// exact match and applied silently; a match only via the English label
+// ("bills" vs "Računi") is close enough to ask about, not close enough to assume.
+function findExistingCategory(name, list) {
+  const norm = normalizeCategory(name);
+  const exact = list.find(cat => normalizeCategory(cat) === norm);
+  if (exact) return { category: exact, exact: true };
+  const alias = list.find(cat => normalizeCategory(CATEGORY_LABELS_EN[cat]) === norm);
+  if (alias) return { category: alias, exact: false };
+  return null;
+}
+
+function applyCategory(item, kind, category) {
+  item.category = category;
+  bumpCategoryUsage(kind, category);
+  if (kind === 'expense') saveExpenses(); else saveSavings();
+}
+
+const categorySuggestion = ref(null);
+
 function confirmNewCategory(item, kind) {
   const name = newCategoryName.value.trim();
   addingCategoryFor.value = null;
   if (!name) return;
 
-  const list = kind === 'expense' ? customExpenseCategories : customSavingsCategories;
   const existing = kind === 'expense' ? allExpenseCategories.value : allSavingsCategories.value;
-  if (!existing.includes(name)) {
-    list.push(name);
-    persistCustomCategories(kind);
+  const found = findExistingCategory(name, existing);
+
+  if (found?.exact) {
+    applyCategory(item, kind, found.category);
+    return;
+  }
+  if (found) {
+    categorySuggestion.value = { itemKey: keyFor(item), item, kind, typed: name, match: found.category };
+    return;
   }
 
-  item.category = name;
-  bumpCategoryUsage(kind, name);
-  if (kind === 'expense') saveExpenses(); else saveSavings();
+  const list = kind === 'expense' ? customExpenseCategories : customSavingsCategories;
+  list.push(name);
+  persistCustomCategories(kind);
+  applyCategory(item, kind, name);
+}
+function acceptCategorySuggestion() {
+  const s = categorySuggestion.value;
+  if (!s) return;
+  applyCategory(s.item, s.kind, s.match);
+  categorySuggestion.value = null;
+}
+function rejectCategorySuggestion() {
+  const s = categorySuggestion.value;
+  if (!s) return;
+  const list = s.kind === 'expense' ? customExpenseCategories : customSavingsCategories;
+  list.push(s.typed);
+  persistCustomCategories(s.kind);
+  applyCategory(s.item, s.kind, s.typed);
+  categorySuggestion.value = null;
 }
 
 const expenses = reactive(clone(defaultExpenses));
@@ -1763,6 +1823,10 @@ function switchLangUrl(target) {
 .savings-pick select{
   font-family:'Inter',sans-serif; font-size:11px; color:var(--ink); background:transparent;
   border:1px solid var(--border); border-radius:4px; max-width:76px; padding:2px;
+}
+.cat-suggest{
+  display:flex; align-items:center; gap:4px; font-family:'Inter',sans-serif;
+  font-size:11px; color:var(--ink-light); white-space:normal;
 }
 
 .month-picker-native{
