@@ -164,6 +164,73 @@ class BudgetController extends Controller
     }
 
     /**
+     * Rename or delete a custom category everywhere it's used — the category
+     * list, the usage counts, and every saved item (across all months for
+     * expenses/income, the single global row for savings) that references it.
+     * Deleting falls items back to "Ostalo" rather than leaving them orphaned.
+     */
+    public function updateCategory(Request $request)
+    {
+        $data = $request->validate([
+            'kind' => ['required', 'string', 'in:expense,savings'],
+            'action' => ['required', 'string', 'in:rename,delete'],
+            'from' => ['required', 'string', 'max:255'],
+            'to' => ['required_if:action,rename', 'nullable', 'string', 'max:255'],
+        ]);
+
+        $user = $request->user();
+        $from = $data['from'];
+        $replacement = $data['action'] === 'rename' ? trim($data['to']) : 'Ostalo';
+
+        $customKey = $data['kind'] === 'expense' ? 'custom-categories-expense' : 'custom-categories-savings';
+        $usageKey = $data['kind'] === 'expense' ? 'category-usage-expense' : 'category-usage-savings';
+        $itemKey = $data['kind'] === 'expense' ? 'expense-items' : 'savings-items';
+
+        $customRow = $user->budgetData()->where('key', $customKey)->where('period', 'global')->first();
+        if ($customRow) {
+            $list = json_decode($customRow->value, true) ?: [];
+            $list = $data['action'] === 'rename'
+                ? array_map(fn ($cat) => $cat === $from ? $replacement : $cat, $list)
+                : array_filter($list, fn ($cat) => $cat !== $from);
+            $customRow->update(['value' => json_encode(array_values(array_unique($list)))]);
+        }
+
+        $usageRow = $user->budgetData()->where('key', $usageKey)->where('period', 'global')->first();
+        if ($usageRow) {
+            $usage = json_decode($usageRow->value, true) ?: [];
+            if (array_key_exists($from, $usage)) {
+                $count = $usage[$from];
+                unset($usage[$from]);
+                if ($data['action'] === 'rename') {
+                    $usage[$replacement] = ($usage[$replacement] ?? 0) + $count;
+                }
+                $usageRow->update(['value' => json_encode($usage)]);
+            }
+        }
+
+        $rows = $user->budgetData()->where('key', $itemKey)->get();
+        foreach ($rows as $row) {
+            $items = json_decode($row->value, true);
+            if (! is_array($items)) {
+                continue;
+            }
+            $changed = false;
+            foreach ($items as &$item) {
+                if (is_array($item) && ($item['category'] ?? null) === $from) {
+                    $item['category'] = $replacement;
+                    $changed = true;
+                }
+            }
+            unset($item);
+            if ($changed) {
+                $row->update(['value' => json_encode($items)]);
+            }
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
      * Recurring items (freq !== 0) are meant to look the same everywhere once
      * edited — propagate name/amount/currency/freq/category/endPeriod to any
      * later month that already has its own saved row, without touching that

@@ -155,7 +155,7 @@
             </div>
 
             <div class="section-title">{{ t('income') }}</div>
-            <table>
+            <table ref="incomeTableRef">
               <thead>
                 <tr>
                   <th style="width:auto">{{ t('item') }}</th>
@@ -196,13 +196,13 @@
                 </tr>
               </TransitionGroup>
             </table>
-            <button class="add-row" @click="addRow(income, t('newIncomeName'), saveIncome)"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addIncome') }}</button>
+            <button class="add-row" @click="addRow(income, t('newIncomeName'), saveIncome, incomeTableRef)"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addIncome') }}</button>
             <button v-if="oneTimeIncomeCount > 0" class="reset-link load-more-btn" @click="showOneTimeIncome = !showOneTimeIncome">
               {{ showOneTimeIncome ? t('hideOneTimeIncome') : t('showOneTimeIncome') }} ({{ oneTimeIncomeCount }})
             </button>
 
             <div class="section-title">{{ t('expenses') }}</div>
-            <table>
+            <table ref="expenseTableRef">
               <thead>
                 <tr>
                   <th style="width:auto">{{ t('item') }}</th>
@@ -292,10 +292,30 @@
                 </tr>
               </TransitionGroup>
             </table>
-            <button class="add-row" @click="addRow(expenses, t('newExpenseName'), saveExpenses)"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addExpense') }}</button>
+            <button class="add-row" @click="addRow(expenses, t('newExpenseName'), saveExpenses, expenseTableRef)"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addExpense') }}</button>
             <button v-if="oneTimeExpensesCount > 0" class="reset-link load-more-btn" @click="showOneTimeExpenses = !showOneTimeExpenses">
               {{ showOneTimeExpenses ? t('hideOneTimeExpenses') : t('showOneTimeExpenses') }} ({{ oneTimeExpensesCount }})
             </button>
+
+            <div v-if="customExpenseCategories.length" class="category-manage">
+              <button type="button" class="reset-link load-more-btn" @click="showManageExpenseCategories = !showManageExpenseCategories">
+                {{ t('manageCategories') }} ({{ customExpenseCategories.length }})
+              </button>
+              <div v-if="showManageExpenseCategories" class="category-manage-list">
+                <div v-for="cat in customExpenseCategories" :key="cat" class="category-manage-row">
+                  <input
+                    v-if="renamingCategory && renamingCategory.kind === 'expense' && renamingCategory.from === cat"
+                    type="text" v-model="renamingCategory.to" autofocus class="month-picker-native"
+                    @keyup.enter="$event.target.blur()" @change="commitCategoryRename" @blur="cancelCategoryRename"
+                  >
+                  <span v-else>{{ categoryLabel(cat) }}</span>
+                  <div class="category-manage-actions">
+                    <button class="del-btn" type="button" @click="startCategoryRename('expense', cat)" :title="t('renameCategoryTitle')">✎</button>
+                    <button class="del-btn" type="button" @click="deleteCategory('expense', cat)" :title="t('deleteCategoryTitle')">🗑</button>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div class="savings-line" v-if="recurringExpTotal > 0">
               {{ t('recurringExpensesLabel') }} <strong>{{ fmt(recurringExpTotal) }} RSD</strong>
@@ -312,7 +332,7 @@
             </div>
 
             <div class="section-title">{{ t('savingsAndAssets') }}</div>
-            <table>
+            <table ref="savingsTableRef">
               <thead>
                 <tr>
                   <th style="width:auto">{{ t('item') }}</th>
@@ -357,6 +377,26 @@
               </TransitionGroup>
             </table>
             <button class="add-row" @click="addSavingsRow"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addSaving') }}</button>
+
+            <div v-if="customSavingsCategories.length" class="category-manage">
+              <button type="button" class="reset-link load-more-btn" @click="showManageSavingsCategories = !showManageSavingsCategories">
+                {{ t('manageCategories') }} ({{ customSavingsCategories.length }})
+              </button>
+              <div v-if="showManageSavingsCategories" class="category-manage-list">
+                <div v-for="cat in customSavingsCategories" :key="cat" class="category-manage-row">
+                  <input
+                    v-if="renamingCategory && renamingCategory.kind === 'savings' && renamingCategory.from === cat"
+                    type="text" v-model="renamingCategory.to" autofocus class="month-picker-native"
+                    @keyup.enter="$event.target.blur()" @change="commitCategoryRename" @blur="cancelCategoryRename"
+                  >
+                  <span v-else>{{ categoryLabel(cat) }}</span>
+                  <div class="category-manage-actions">
+                    <button class="del-btn" type="button" @click="startCategoryRename('savings', cat)" :title="t('renameCategoryTitle')">✎</button>
+                    <button class="del-btn" type="button" @click="deleteCategory('savings', cat)" :title="t('deleteCategoryTitle')">🗑</button>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div class="rates">
               <div>
@@ -503,6 +543,9 @@ const TRANSLATIONS = {
     didYouMean: 'Misliš na',
     useExistingCategoryTitle: 'Da, koristi tu kategoriju',
     createNewCategoryTitle: 'Ne, napravi novu kategoriju',
+    manageCategories: 'Uredi dodate kategorije',
+    renameCategoryTitle: 'Preimenuj kategoriju',
+    deleteCategoryTitle: 'Obriši kategoriju',
     addIncome: 'Dodaj primanje',
     addExpense: 'Dodaj trošak',
     addSaving: 'Dodaj stavku štednje',
@@ -601,6 +644,9 @@ const TRANSLATIONS = {
     didYouMean: 'Did you mean',
     useExistingCategoryTitle: 'Yes, use that category',
     createNewCategoryTitle: 'No, create a new category',
+    manageCategories: 'Manage added categories',
+    renameCategoryTitle: 'Rename category',
+    deleteCategoryTitle: 'Delete category',
     addIncome: 'Add income',
     addExpense: 'Add expense',
     addSaving: 'Add savings item',
@@ -817,6 +863,32 @@ function rejectCategorySuggestion() {
   categorySuggestion.value = null;
 }
 
+const showManageExpenseCategories = ref(false);
+const showManageSavingsCategories = ref(false);
+const renamingCategory = ref(null);
+
+function startCategoryRename(kind, from) {
+  renamingCategory.value = { kind, from, to: from };
+}
+function cancelCategoryRename() {
+  renamingCategory.value = null;
+}
+async function applyCategoryChange(kind, action, from, to) {
+  await axios.post('/api/budget/categories', { kind, action, from, to });
+  await loadState(currentPeriod.value);
+}
+async function commitCategoryRename() {
+  const r = renamingCategory.value;
+  if (!r) return;
+  const to = r.to.trim();
+  renamingCategory.value = null;
+  if (!to || to === r.from) return;
+  await applyCategoryChange(r.kind, 'rename', r.from, to);
+}
+async function deleteCategory(kind, from) {
+  await applyCategoryChange(kind, 'delete', from);
+}
+
 const expenses = reactive(clone(defaultExpenses));
 const income = reactive(clone(defaultIncome));
 const savings = reactive(clone(defaultSavings));
@@ -925,13 +997,36 @@ function saveIncome() { persist('income-items', income, currentPeriod.value); }
 function saveSavings() { persist('savings-items', savings); }
 function saveRates() { persist('expense-rates', rates, currentPeriod.value); }
 
-function addRow(arr, name, save) {
+const incomeTableRef = ref(null);
+const expenseTableRef = ref(null);
+const savingsTableRef = ref(null);
+
+// New rows land at the bottom of what can be a long list — scroll to it and
+// focus the name field so adding one is never mistaken for "nothing happened".
+function focusNewRow(tableRef) {
+  nextTick(() => {
+    const table = tableRef?.value;
+    if (!table) return;
+    const rows = table.querySelectorAll('tbody tr');
+    const lastRow = rows[rows.length - 1];
+    const input = lastRow?.querySelector('.cell-name input');
+    if (input) {
+      input.focus();
+      input.select();
+      lastRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+}
+
+function addRow(arr, name, save, tableRef) {
   arr.push({ id: generateId(), name, amount: 0, currency: 'RSD', freq: 1, active: true, endPeriod: null, category: 'Ostalo' });
   save();
+  focusNewRow(tableRef);
 }
 function addSavingsRow() {
   savings.push({ id: generateId(), name: t('newSavingName'), amount: 0, currency: 'RSD', category: 'Ostalo' });
   saveSavings();
+  focusNewRow(savingsTableRef);
 }
 function removeRow(arr, item, save) {
   const idx = arr.indexOf(item);
@@ -1694,6 +1789,9 @@ function switchLangUrl(target) {
   --panel-tint:rgba(255,255,255,0.04);
 }
 .tome{ width:100%; max-width:780px; position:relative; margin:0 auto; }
+@media (min-width:900px){
+  .tome{ max-width:960px; }
+}
 
 .cover{
   background:var(--leather);
@@ -1828,6 +1926,20 @@ function switchLangUrl(target) {
   display:flex; align-items:center; gap:4px; font-family:'Inter',sans-serif;
   font-size:11px; color:var(--ink-light); white-space:normal;
 }
+.category-manage{ margin-top:4px; }
+.category-manage-list{
+  display:flex; flex-direction:column; gap:2px; margin-top:6px;
+  border:1px solid var(--border); border-radius:10px; padding:6px;
+}
+.category-manage-row{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:4px 6px; font-family:'Inter',sans-serif; font-size:13px; color:var(--ink);
+}
+.category-manage-row input{
+  font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); color-scheme:light dark;
+  background:transparent; border:none; border-bottom:1px solid var(--gilt); padding:2px; flex:1;
+}
+.category-manage-actions{ display:flex; align-items:center; gap:2px; flex-shrink:0; }
 
 .month-picker-native{
   font-family:'Inter',sans-serif; font-size:12.5px; color:var(--ink); color-scheme:light dark;
