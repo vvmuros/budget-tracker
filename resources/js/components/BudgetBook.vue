@@ -460,8 +460,14 @@
               <div v-else-if="!rateChart.usdPath" class="empty-note">{{ t('noRateHistory') }}</div>
               <template v-else>
                 <svg class="rate-chart-svg" :viewBox="`0 0 ${rateChart.width} ${rateChart.height}`" preserveAspectRatio="xMidYMid meet">
+                  <g v-for="(g, i) in rateChart.gridlines" :key="i">
+                    <line :x1="rateChart.leftPad" :x2="rateChart.width - 4" :y1="g.y" :y2="g.y" class="rate-chart-gridline" />
+                    <text :x="rateChart.leftPad - 6" :y="g.y + 3" text-anchor="end" class="rate-chart-label">{{ g.value.toFixed(2) }}</text>
+                  </g>
                   <path :d="rateChart.usdPath" fill="none" stroke="#818CF8" stroke-width="2" />
                   <path :d="rateChart.eurPath" fill="none" stroke="#2DD4BF" stroke-width="2" />
+                  <circle v-for="(p, i) in rateChart.usdPoints" :key="'u'+i" :cx="p[0]" :cy="p[1]" r="2.5" fill="#818CF8" />
+                  <circle v-for="(p, i) in rateChart.eurPoints" :key="'e'+i" :cx="p[0]" :cy="p[1]" r="2.5" fill="#2DD4BF" />
                   <text
                     v-for="(lbl, i) in rateChart.labels" :key="i"
                     :x="lbl.x" :y="rateChart.height - 6" text-anchor="middle" class="rate-chart-label"
@@ -1823,29 +1829,47 @@ async function loadRateHistory(range) {
 
 const rateChart = computed(() => {
   const width = 600;
-  const height = 160;
-  const padding = 24;
+  const height = 170;
+  const padding = 26;
+  const leftPad = 44;
   const points = rateHistoryPoints.value;
 
   if (!points.length) {
-    return { width, height, usdPath: '', eurPath: '', labels: [] };
+    return { width, height, leftPad, usdPath: '', eurPath: '', usdPoints: [], eurPoints: [], labels: [], gridlines: [] };
   }
 
   const values = points.flatMap(p => [p.usd, p.eur]);
-  const minVal = Math.min(...values);
-  const maxVal = Math.max(...values);
-  const span = maxVal - minVal || 1;
+  let minVal = Math.min(...values);
+  let maxVal = Math.max(...values);
+  if (minVal === maxVal) {
+    minVal -= 1;
+    maxVal += 1;
+  }
+  const span = maxVal - minVal;
 
-  const stepX = points.length > 1 ? (width - padding * 2) / (points.length - 1) : 0;
-  const x = i => padding + i * stepX;
+  const stepX = points.length > 1 ? (width - leftPad - padding) / (points.length - 1) : 0;
+  const x = i => leftPad + i * stepX;
   const y = v => height - padding - ((v - minVal) / span) * (height - padding * 2);
+
+  const usdPoints = points.map((p, i) => [x(i), y(p.usd)]);
+  const eurPoints = points.map((p, i) => [x(i), y(p.eur)]);
+
+  const gridSteps = 4;
+  const gridlines = Array.from({ length: gridSteps + 1 }, (_, i) => {
+    const val = minVal + (span * i) / gridSteps;
+    return { y: y(val), value: val };
+  });
 
   return {
     width,
     height,
-    usdPath: smoothPath(points.map((p, i) => [x(i), y(p.usd)])),
-    eurPath: smoothPath(points.map((p, i) => [x(i), y(p.eur)])),
+    leftPad,
+    usdPath: smoothPath(usdPoints),
+    eurPath: smoothPath(eurPoints),
+    usdPoints,
+    eurPoints,
     labels: points.map((p, i) => ({ x: x(i), text: p.label })),
+    gridlines,
   };
 });
 
@@ -2295,6 +2319,7 @@ function switchLangUrl(target) {
 }
 .rate-range-buttons button.active{ border-color:var(--gilt); color:var(--gilt); }
 .rate-chart-svg{ width:100%; height:auto; display:block; margin-top:8px; }
+.rate-chart-gridline{ stroke:var(--border); stroke-width:1; }
 .rate-chart-label{ font-size:9px; fill:var(--ink-light); font-family:'Inter',sans-serif; }
 .rate-chart-legend{ display:flex; gap:16px; justify-content:center; margin-top:4px; font-size:11px; color:var(--ink-light); }
 .rate-chart-legend .swatch{ width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:5px; }
