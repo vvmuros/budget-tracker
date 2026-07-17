@@ -168,7 +168,12 @@
               </thead>
               <TransitionGroup tag="tbody" name="row">
                 <tr v-for="item in visibleIncome" :key="keyFor(item)" :class="{ inactive: !isIncomeActive(item) }">
-                  <td class="cell-name"><input type="text" v-model="item.name" :title="item.name" @change="saveIncome"></td>
+                  <td class="cell-name">
+                    <input type="text" v-model="item.name" :title="item.name" @change="saveIncome">
+                    <span v-if="item.savingsDiverted > 0" class="diverted-badge" :title="t('divertedToSavingsTitle')">
+                      −{{ fmt(item.savingsDiverted) }} {{ item.currency }} → {{ t('savingsAndAssets') }}
+                    </span>
+                  </td>
                   <td class="amt-col" :data-label="t('amount')"><input type="number" v-model.number="item.amount" step="1" @change="saveIncome"></td>
                   <td class="cur-col" :data-label="t('currency')">
                     <select v-model="item.currency" @change="saveIncome">
@@ -372,11 +377,22 @@
                       <option value="__add__">{{ t('addCategoryOption') }}</option>
                     </select>
                   </td>
-                  <td class="del-col"><button class="del-btn" @click="removeRow(savings, item, saveSavings)" :aria-label="t('deleteRow')"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
+                  <td class="del-col"><button class="del-btn" @click="removeSavingsRow(item)" :aria-label="t('deleteRow')"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
                 </tr>
               </TransitionGroup>
             </table>
             <button class="add-row" @click="addSavingsRow"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addSaving') }}</button>
+            <button v-if="income.length" type="button" class="reset-link load-more-btn" @click="pullingFromIncome = !pullingFromIncome">
+              {{ t('pullFromIncome') }}
+            </button>
+            <div v-if="pullingFromIncome" class="pull-income-form">
+              <select v-model="pullIncomeChoice">
+                <option v-for="it in income" :key="it.id" :value="it.id">{{ it.name }}</option>
+              </select>
+              <input type="number" v-model.number="pullAmount" min="0" step="1" :placeholder="t('amount')" class="pull-income-input">
+              <button type="button" class="del-btn" @click="confirmSavingsFromIncome" :aria-label="t('confirmBtn')">✓</button>
+              <button type="button" class="del-btn" @click="pullingFromIncome = false" :aria-label="t('cancelBtn')">✕</button>
+            </div>
 
             <div v-if="customSavingsCategories.length" class="category-manage">
               <button type="button" class="reset-link load-more-btn" @click="showManageSavingsCategories = !showManageSavingsCategories">
@@ -546,6 +562,9 @@ const TRANSLATIONS = {
     manageCategories: 'Uredi dodate kategorije',
     renameCategoryTitle: 'Preimenuj kategoriju',
     deleteCategoryTitle: 'Obriši kategoriju',
+    pullFromIncome: 'Povuci iz prihoda',
+    fromIncomePrefix: 'Iz:',
+    divertedToSavingsTitle: 'Povučeno iz ovog primanja u štednju ovog meseca',
     addIncome: 'Dodaj primanje',
     addExpense: 'Dodaj trošak',
     addSaving: 'Dodaj stavku štednje',
@@ -647,6 +666,9 @@ const TRANSLATIONS = {
     manageCategories: 'Manage added categories',
     renameCategoryTitle: 'Rename category',
     deleteCategoryTitle: 'Delete category',
+    pullFromIncome: 'Pull from income',
+    fromIncomePrefix: 'From:',
+    divertedToSavingsTitle: 'Diverted from this income into savings this month',
     addIncome: 'Add income',
     addExpense: 'Add expense',
     addSaving: 'Add savings item',
@@ -1034,6 +1056,47 @@ function removeRow(arr, item, save) {
   save();
 }
 
+const pullingFromIncome = ref(false);
+const pullIncomeChoice = ref(null);
+const pullAmount = ref(0);
+
+function confirmSavingsFromIncome() {
+  const incomeItem = income.find(it => it.id === pullIncomeChoice.value);
+  const amount = Number(pullAmount.value) || 0;
+  if (!incomeItem || amount <= 0) return;
+
+  incomeItem.savingsDiverted = (incomeItem.savingsDiverted || 0) + amount;
+  saveIncome();
+
+  savings.push({
+    id: generateId(),
+    name: `${t('fromIncomePrefix')} ${incomeItem.name}`,
+    amount,
+    currency: incomeItem.currency,
+    category: 'Štednja',
+    sourceIncomeId: incomeItem.id,
+    sourceIncomePeriod: currentPeriod.value,
+  });
+  saveSavings();
+
+  pullAmount.value = 0;
+  pullingFromIncome.value = false;
+}
+
+// If this savings row was created by diverting from an income item and
+// we're still on the same month it was diverted from, give that amount
+// back to the income item before removing the row.
+function removeSavingsRow(item) {
+  if (item.sourceIncomeId && item.sourceIncomePeriod === currentPeriod.value) {
+    const incomeItem = income.find(it => it.id === item.sourceIncomeId);
+    if (incomeItem) {
+      incomeItem.savingsDiverted = Math.max(0, (incomeItem.savingsDiverted || 0) - item.amount);
+      saveIncome();
+    }
+  }
+  removeRow(savings, item, saveSavings);
+}
+
 const payingFromSavingsFor = ref(null);
 const payFromSavingsChoice = ref(null);
 
@@ -1206,7 +1269,7 @@ const visibleIncome = computed(() => {
 
 const expThis = computed(() => expenses.reduce((sum, it) => (isExpenseActive(it) && !it.paidFromSavings) ? sum + toRSD(it.amount, it.currency) : sum, 0));
 const recurringExpTotal = computed(() => expenses.reduce((sum, it) => (isExpenseActive(it) && it.freq !== 0 && !it.paidFromSavings) ? sum + toRSD(it.amount, it.currency) : sum, 0));
-const incThis = computed(() => income.reduce((sum, it) => isIncomeActive(it) ? sum + toRSD(it.amount, it.currency) : sum, 0));
+const incThis = computed(() => income.reduce((sum, it) => isIncomeActive(it) ? sum + toRSD(it.amount, it.currency) - toRSD(it.savingsDiverted || 0, it.currency) : sum, 0));
 const expAvg = computed(() => expenses.reduce((sum, it) => {
   if (!it.active || (it.endPeriod && currentPeriod.value > it.endPeriod)) return sum;
   const r = toRSD(it.amount, it.currency);
@@ -1940,6 +2003,22 @@ function switchLangUrl(target) {
   background:transparent; border:none; border-bottom:1px solid var(--gilt); padding:2px; flex:1;
 }
 .category-manage-actions{ display:flex; align-items:center; gap:2px; flex-shrink:0; }
+.pull-income-form{
+  display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:6px;
+  padding:8px; border:1px solid var(--border); border-radius:10px;
+}
+.pull-income-form select{
+  font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); background:transparent;
+  border:1px solid var(--border); border-radius:6px; padding:4px 6px;
+}
+.pull-income-input{
+  width:90px; font-family:'Inter',sans-serif; font-size:13px; color:var(--ink);
+  background:transparent; border:1px solid var(--border); border-radius:6px; padding:4px 6px;
+}
+.diverted-badge{
+  display:block; font-family:'Inter',sans-serif; font-size:11px; color:var(--ink-light);
+  white-space:normal;
+}
 
 .month-picker-native{
   font-family:'Inter',sans-serif; font-size:12.5px; color:var(--ink); color-scheme:light dark;
@@ -2180,27 +2259,27 @@ function switchLangUrl(target) {
   .page tbody tr{
     position:relative;
     border:1px solid var(--border);
-    border-radius:12px;
-    padding:12px 40px 4px 12px;
-    margin-bottom:10px;
+    border-radius:10px;
+    padding:9px 36px 2px 10px;
+    margin-bottom:7px;
     background:var(--card-tint);
   }
   .page tbody tr.inactive{ background:var(--card-tint-dim); }
 
-  .page tbody td{ padding:7px 0; border-bottom:1px solid var(--border); }
+  .page tbody td{ padding:4px 0; border-bottom:1px solid var(--border); }
   .page td[data-label]{
     display:flex; align-items:center; justify-content:space-between; gap:10px;
   }
   .page td[data-label]::before{
     content:attr(data-label);
-    font-size:10px; text-transform:uppercase; letter-spacing:0.05em;
+    font-size:9px; text-transform:uppercase; letter-spacing:0.04em;
     color:var(--ink-light); flex-shrink:0;
   }
   .page td[data-label] input, .page td[data-label] select{ text-align:right; }
   .page td[data-label]:last-of-type{ border-bottom:none; }
 
-  .page td.cell-name{ display:flex; align-items:center; gap:6px; font-size:15px; border-bottom:1px solid var(--border); }
-  .page td.cell-name input{ font-size:15px; font-weight:600; text-overflow:ellipsis; }
+  .page td.cell-name{ display:flex; align-items:center; gap:6px; font-size:14px; padding:6px 0; border-bottom:1px solid var(--border); }
+  .page td.cell-name input{ font-size:14px; font-weight:600; text-overflow:ellipsis; }
   .cat-dot{ display:inline-block; }
 
   .page td.amt-col{ display:inline-flex; width:58%; border-bottom:none; }
@@ -2208,11 +2287,17 @@ function switchLangUrl(target) {
   .page td.cur-col[data-label]::before{ display:none; }
   .page td.cur-col select{ text-align:left; }
 
+  .page td.end-col{ display:inline-flex; width:48%; border-bottom:none; }
+  .page td.cat-col{ display:inline-flex; width:50%; }
+
+  .page td.chk-col{ padding:3px 0; }
+
   .page td.del-col{
-    position:absolute; top:10px; right:8px;
+    position:absolute; top:8px; right:8px;
     width:auto; padding:0; border:none; text-align:right;
   }
-  .page td.del-col .del-btn .icon{ width:16px; height:16px; }
+  .page td.del-col .del-btn .icon{ width:15px; height:15px; }
+  .page td.del-col .del-btn{ padding:2px; }
 
   .totals{ flex-direction:column; align-items:stretch; gap:14px; }
   .totals-text{ max-width:none; }

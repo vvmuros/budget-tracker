@@ -27,7 +27,13 @@ class BudgetCalculator
 
         return collect($items)
             ->filter(fn ($it) => $this->isItemActive($it, $period) && empty($it['paidFromSavings']))
-            ->sum(fn ($it) => $this->toRsd($it['amount'] ?? 0, $it['currency'] ?? 'RSD', $rates));
+            ->sum(function ($it) use ($rates) {
+                $currency = $it['currency'] ?? 'RSD';
+                $amount = $this->toRsd($it['amount'] ?? 0, $currency, $rates);
+                $diverted = $this->toRsd($it['savingsDiverted'] ?? 0, $currency, $rates);
+
+                return $amount - $diverted;
+            });
     }
 
     public function sumByCategory(string $json, array $rates, ?string $period = null): array
