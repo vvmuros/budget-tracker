@@ -446,6 +446,34 @@
               <div class="note">{{ t('rateNote') }}</div>
             </div>
 
+            <div class="rate-chart-section">
+              <div class="rate-chart-header">
+                <span class="section-title" style="margin:0">{{ t('rateHistory') }}</span>
+                <div class="rate-range-buttons">
+                  <button
+                    v-for="r in RATE_RANGES" :key="r" type="button"
+                    :class="{ active: rateRange === r }" @click="loadRateHistory(r)"
+                  >{{ t('rateRange_' + r) }}</button>
+                </div>
+              </div>
+              <div v-if="rateHistoryLoading" class="foot-note">{{ t('loadingAnalysis') }}</div>
+              <div v-else-if="!rateChart.usdPath" class="empty-note">{{ t('noRateHistory') }}</div>
+              <template v-else>
+                <svg class="rate-chart-svg" :viewBox="`0 0 ${rateChart.width} ${rateChart.height}`" preserveAspectRatio="xMidYMid meet">
+                  <path :d="rateChart.usdPath" fill="none" stroke="#818CF8" stroke-width="2" />
+                  <path :d="rateChart.eurPath" fill="none" stroke="#2DD4BF" stroke-width="2" />
+                  <text
+                    v-for="(lbl, i) in rateChart.labels" :key="i"
+                    :x="lbl.x" :y="rateChart.height - 6" text-anchor="middle" class="rate-chart-label"
+                  >{{ lbl.text }}</text>
+                </svg>
+                <div class="rate-chart-legend">
+                  <span class="legend-item"><span class="swatch" style="background:#818CF8"></span> USD</span>
+                  <span class="legend-item"><span class="swatch" style="background:#2DD4BF"></span> EUR</span>
+                </div>
+              </template>
+            </div>
+
             <div class="section-title">{{ t('currencyConverter') }}</div>
             <div class="converter">
               <div>
@@ -598,6 +626,13 @@ const TRANSLATIONS = {
     usdRate: '1 USD =',
     eurRate: '1 EUR =',
     rateNote: 'srednji kurs NBS, po volji izmeni',
+    rateHistory: 'Istorija kursa',
+    rateRange_day: 'Dan',
+    rateRange_7d: '7 dana',
+    rateRange_week: 'Nedeljno',
+    rateRange_month: 'Mesečno',
+    rateRange_year: 'Godišnje',
+    noRateHistory: 'Još nema sačuvane istorije kursa za ovaj period.',
     currencyConverter: 'Konverter valuta',
     fromLabel: 'Iz',
     toLabel: 'U',
@@ -702,6 +737,13 @@ const TRANSLATIONS = {
     usdRate: '1 USD =',
     eurRate: '1 EUR =',
     rateNote: 'NBS mid rate, adjust as you like',
+    rateHistory: 'Rate history',
+    rateRange_day: 'Day',
+    rateRange_7d: '7 days',
+    rateRange_week: 'Weekly',
+    rateRange_month: 'Monthly',
+    rateRange_year: 'Yearly',
+    noRateHistory: 'No rate history saved for this period yet.',
     currencyConverter: 'Currency converter',
     fromLabel: 'From',
     toLabel: 'To',
@@ -990,7 +1032,13 @@ async function loadState(period) {
         return { id: it.id || generateId(), ...it };
       }));
     }
-    if (d['expense-rates']) Object.assign(rates, JSON.parse(d['expense-rates']));
+    if (d['expense-rates']) {
+      Object.assign(rates, JSON.parse(d['expense-rates']));
+    } else if (data.latest_rates) {
+      // Never saved a rate before — use today's real NBS rate as the
+      // starting point instead of the hardcoded fallback constant.
+      Object.assign(rates, data.latest_rates);
+    }
     if (d['savings-items']) {
       replaceArray(savings, JSON.parse(d['savings-items']).map(it => {
         if (!it.id) needsSavingsIdBackfill = true;
@@ -1755,6 +1803,54 @@ function smoothPath(points) {
   return d;
 }
 
+const RATE_RANGES = ['day', '7d', 'week', 'month', 'year'];
+const rateRange = ref('7d');
+const rateHistoryPoints = ref([]);
+const rateHistoryLoading = ref(false);
+
+async function loadRateHistory(range) {
+  rateRange.value = range;
+  rateHistoryLoading.value = true;
+  try {
+    const { data } = await axios.get('/api/exchange-rate/history', { params: { range } });
+    rateHistoryPoints.value = data.points || [];
+  } catch (e) {
+    rateHistoryPoints.value = [];
+  } finally {
+    rateHistoryLoading.value = false;
+  }
+}
+
+const rateChart = computed(() => {
+  const width = 600;
+  const height = 160;
+  const padding = 24;
+  const points = rateHistoryPoints.value;
+
+  if (!points.length) {
+    return { width, height, usdPath: '', eurPath: '', labels: [] };
+  }
+
+  const values = points.flatMap(p => [p.usd, p.eur]);
+  const minVal = Math.min(...values);
+  const maxVal = Math.max(...values);
+  const span = maxVal - minVal || 1;
+
+  const stepX = points.length > 1 ? (width - padding * 2) / (points.length - 1) : 0;
+  const x = i => padding + i * stepX;
+  const y = v => height - padding - ((v - minVal) / span) * (height - padding * 2);
+
+  return {
+    width,
+    height,
+    usdPath: smoothPath(points.map((p, i) => [x(i), y(p.usd)])),
+    eurPath: smoothPath(points.map((p, i) => [x(i), y(p.eur)])),
+    labels: points.map((p, i) => ({ x: x(i), text: p.label })),
+  };
+});
+
+onMounted(() => loadRateHistory('7d'));
+
 const hoveredIndex = ref(null);
 
 const yearChart = computed(() => {
@@ -2188,6 +2284,21 @@ function switchLangUrl(target) {
 .rates label{ color:var(--ink-light); display:block; margin-bottom:4px; font-size:10px; text-transform:uppercase; letter-spacing:0.05em; }
 .rates input{ width:80px; border-bottom:1px solid var(--border); }
 .rates .note{ color:var(--ink-light); font-size:11.5px; align-self:flex-end; }
+
+.rate-chart-section{ margin-bottom:24px; }
+.rate-chart-header{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+.rate-range-buttons{ display:flex; gap:4px; flex-wrap:wrap; }
+.rate-range-buttons button{
+  background:none; border:1px solid var(--border); color:var(--ink-light);
+  font-family:'Inter',sans-serif; font-size:11px; border-radius:8px;
+  padding:5px 9px; cursor:pointer;
+}
+.rate-range-buttons button.active{ border-color:var(--gilt); color:var(--gilt); }
+.rate-chart-svg{ width:100%; height:auto; display:block; margin-top:8px; }
+.rate-chart-label{ font-size:9px; fill:var(--ink-light); font-family:'Inter',sans-serif; }
+.rate-chart-legend{ display:flex; gap:16px; justify-content:center; margin-top:4px; font-size:11px; color:var(--ink-light); }
+.rate-chart-legend .swatch{ width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:5px; }
+.empty-note{ color:var(--ink-light); font-size:12px; text-align:center; padding:12px 0; }
 
 .converter{
   display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;

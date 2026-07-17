@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BudgetData;
+use App\Models\ExchangeRateSnapshot;
 use App\Models\User;
 use App\Services\BudgetCalculator;
 use App\Services\GeminiClient;
@@ -82,12 +83,23 @@ class BudgetController extends Controller
             ]), $templatePeriod);
         }
 
+        // Only relevant when the user has never saved a rate for any period —
+        // gives the frontend a real-world default instead of the hardcoded one.
+        $latestRates = null;
+        if (! isset($result['expense-rates'])) {
+            $snapshot = ExchangeRateSnapshot::orderByDesc('date')->first();
+            if ($snapshot) {
+                $latestRates = ['usd' => $snapshot->usd, 'eur' => $snapshot->eur];
+            }
+        }
+
         return response()->json([
             'data' => $result,
             'period' => $period,
             'is_new_period' => $isNewPeriod,
             'previous_net' => $previousNet,
             'template_period' => $templatePeriod,
+            'latest_rates' => $latestRates,
         ])->header('Cache-Control', 'no-store, must-revalidate');
     }
 

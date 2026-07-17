@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BudgetController;
+use App\Http\Controllers\ExchangeRateController;
 use App\Http\Controllers\PushController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SettingsController;
@@ -55,6 +56,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/api/budget/categories', [BudgetController::class, 'updateCategory'])->middleware('throttle:20,1')->name('budget.categories');
     Route::get('/api/budget/report/pdf', [ReportController::class, 'monthlyPdf'])->middleware('throttle:10,1')->name('report.monthlyPdf');
 
+    Route::get('/api/exchange-rate/latest', [ExchangeRateController::class, 'latest'])->name('exchangeRate.latest');
+    Route::get('/api/exchange-rate/history', [ExchangeRateController::class, 'history'])->name('exchangeRate.history');
+
     Route::get('/api/push/public-key', [PushController::class, 'publicKey'])->name('push.publicKey');
     Route::post('/api/push/subscribe', [PushController::class, 'subscribe'])->name('push.subscribe');
     Route::post('/api/push/unsubscribe', [PushController::class, 'unsubscribe'])->name('push.unsubscribe');
@@ -66,3 +70,7 @@ Route::middleware(['auth'])->group(function () {
 // leftover. Deliberately outside the 'auth' group — it's not a user request,
 // it's the server telling itself to fan out reminders to everyone.
 Route::post('/cron/monthly-reminder', [PushController::class, 'sendMonthlyReminders'])->name('cron.monthlyReminder');
+
+// Hit once a day (e.g. by the same free external cron-ping service) with
+// ?token=CRON_SECRET to record that day's official NBS middle rate.
+Route::post('/cron/fetch-exchange-rate', [ExchangeRateController::class, 'fetchAndStore'])->name('cron.fetchExchangeRate');
