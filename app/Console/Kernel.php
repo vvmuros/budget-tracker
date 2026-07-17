@@ -12,7 +12,8 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        $schedule->command('exchange-rate:fetch')->dailyAt('09:00');
+        $schedule->command('reminders:send-monthly')->monthlyOn(1, '09:00');
     }
 
     /**

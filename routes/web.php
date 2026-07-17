@@ -64,13 +64,3 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/api/push/unsubscribe', [PushController::class, 'unsubscribe'])->name('push.unsubscribe');
     Route::post('/api/push/test', [PushController::class, 'sendTest'])->middleware('throttle:6,1')->name('push.test');
 });
-
-// Hit once a month (e.g. by a free external cron-ping service) with
-// ?token=CRON_SECRET to nudge every subscribed user about last month's
-// leftover. Deliberately outside the 'auth' group — it's not a user request,
-// it's the server telling itself to fan out reminders to everyone.
-Route::post('/cron/monthly-reminder', [PushController::class, 'sendMonthlyReminders'])->name('cron.monthlyReminder');
-
-// Hit once a day (e.g. by the same free external cron-ping service) with
-// ?token=CRON_SECRET to record that day's official NBS middle rate.
-Route::post('/cron/fetch-exchange-rate', [ExchangeRateController::class, 'fetchAndStore'])->name('cron.fetchExchangeRate');

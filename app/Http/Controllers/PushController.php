@@ -59,15 +59,12 @@ class PushController extends Controller
     }
 
     /**
-     * Triggered by an external cron ping on the 1st of the month (see
-     * routes/web.php) — sends every subscribed user a reminder about last
-     * month's leftover, if there was any.
+     * Called by the app:send-monthly-reminders scheduled command (see
+     * app/Console/Kernel.php) on the 1st of the month — sends every
+     * subscribed user a reminder about last month's leftover, if there was any.
      */
-    public function sendMonthlyReminders(Request $request)
+    public function sendMonthlyRemindersToAll(): array
     {
-        $secret = config('services.cron.secret');
-        abort_if(! $secret || ! hash_equals($secret, (string) $request->query('token', '')), 403);
-
         $period = now()->subMonthNoOverflow()->format('Y-m');
         $sentCount = 0;
 
@@ -77,7 +74,7 @@ class PushController extends Controller
             }
         });
 
-        return response()->json(['period' => $period, 'notified' => $sentCount]);
+        return ['period' => $period, 'notified' => $sentCount];
     }
 
     private function sendReminderToUser(User $user, string $period, string $lang, bool $force): bool

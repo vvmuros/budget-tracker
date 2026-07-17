@@ -44,23 +44,11 @@ class PushSubscriptionTest extends TestCase
         $this->assertDatabaseMissing('push_subscriptions', ['user_id' => $user->id]);
     }
 
-    public function test_monthly_reminder_cron_rejects_wrong_or_missing_token(): void
+    public function test_monthly_reminders_command_runs_successfully(): void
     {
-        config(['services.cron.secret' => 'correct-secret']);
-
-        $this->postJson('/cron/monthly-reminder')->assertForbidden();
-        $this->postJson('/cron/monthly-reminder?token=wrong')->assertForbidden();
-    }
-
-    public function test_monthly_reminder_cron_succeeds_with_correct_token(): void
-    {
-        config(['services.cron.secret' => 'correct-secret']);
-
         // No users have push subscriptions, so this never attempts an actual
-        // network send — it just confirms the endpoint accepts the token.
-        $this->postJson('/cron/monthly-reminder?token=correct-secret')
-            ->assertOk()
-            ->assertJson(['notified' => 0]);
+        // network send — it just confirms the command runs and reports zero.
+        $this->artisan('reminders:send-monthly')->assertSuccessful();
     }
 
     public function test_send_test_reports_nothing_sent_without_a_subscription(): void

@@ -26,22 +26,11 @@ class ExchangeRateTest extends TestCase
         ]);
     }
 
-    public function test_cron_endpoint_rejects_wrong_or_missing_token(): void
+    public function test_fetch_command_stores_todays_snapshot(): void
     {
         $this->fakeNbsHtml();
 
-        $this->postJson('/cron/fetch-exchange-rate')->assertStatus(403);
-        $this->postJson('/cron/fetch-exchange-rate?token=wrong')->assertStatus(403);
-    }
-
-    public function test_cron_endpoint_stores_todays_snapshot_with_correct_token(): void
-    {
-        $this->fakeNbsHtml();
-        $secret = config('services.cron.secret');
-
-        $this->postJson("/cron/fetch-exchange-rate?token={$secret}")
-            ->assertOk()
-            ->assertJson(['ok' => true]);
+        $this->artisan('exchange-rate:fetch')->assertSuccessful();
 
         $this->assertDatabaseHas('exchange_rate_snapshots', [
             'date' => now()->toDateString(),
@@ -50,15 +39,14 @@ class ExchangeRateTest extends TestCase
         ]);
     }
 
-    public function test_cron_endpoint_is_idempotent_for_the_same_day(): void
+    public function test_fetch_command_is_idempotent_for_the_same_day(): void
     {
         $this->fakeNbsHtml();
-        $secret = config('services.cron.secret');
 
-        $this->postJson("/cron/fetch-exchange-rate?token={$secret}")->assertOk();
-        $this->postJson("/cron/fetch-exchange-rate?token={$secret}")->assertOk();
+        $this->artisan('exchange-rate:fetch')->assertSuccessful();
+        $this->artisan('exchange-rate:fetch')->assertSuccessful();
 
-        $this->assertSame(1, ExchangeRateSnapshot::count(), 'Calling it twice the same day should update, not duplicate, the row');
+        $this->assertSame(1, ExchangeRateSnapshot::count(), 'Running it twice the same day should update, not duplicate, the row');
     }
 
     public function test_latest_endpoint_returns_the_most_recent_snapshot(): void

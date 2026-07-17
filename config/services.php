@@ -48,8 +48,4 @@ return [
         'subject' => env('VAPID_SUBJECT'),
     ],
 
-    'cron' => [
-        'secret' => env('CRON_SECRET'),
-    ],
-
 ];

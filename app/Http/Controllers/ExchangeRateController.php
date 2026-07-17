@@ -3,34 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\ExchangeRateSnapshot;
-use App\Services\NbsRateService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class ExchangeRateController extends Controller
 {
-    /**
-     * Hit once a day by an external cron-ping service (same pattern as the
-     * monthly savings reminder) to record today's official NBS middle rate.
-     */
-    public function fetchAndStore(Request $request, NbsRateService $nbs)
-    {
-        $secret = config('services.cron.secret');
-        abort_if(! $secret || ! hash_equals($secret, (string) $request->query('token', '')), 403);
-
-        $rates = $nbs->fetchCurrentMiddleRate();
-        if (! $rates) {
-            return response()->json(['ok' => false, 'error' => 'Could not read NBS rate page.'], 502);
-        }
-
-        ExchangeRateSnapshot::updateOrCreate(
-            ['date' => now()->toDateString()],
-            ['usd' => $rates['usd'], 'eur' => $rates['eur']]
-        );
-
-        return response()->json(['ok' => true, 'rates' => $rates]);
-    }
-
     public function latest()
     {
         $snapshot = ExchangeRateSnapshot::orderByDesc('date')->first();
