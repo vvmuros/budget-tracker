@@ -170,6 +170,7 @@
                 <tr v-for="item in visibleIncome" :key="keyFor(item)" :class="{ inactive: !isIncomeActive(item) }">
                   <td class="cell-name">
                     <input type="text" v-model="item.name" :title="item.name" @change="saveIncome">
+                    <span v-if="item.createdAt" class="created-badge">{{ formatCreatedAt(item.createdAt) }}</span>
                     <span v-if="divertedForIncome(item.id) > 0" class="diverted-badge" :title="t('divertedToSavingsTitle')">
                       −{{ fmt(fromRSD(divertedForIncome(item.id), item.currency)) }} {{ item.currency }} → {{ t('savingsAndAssets') }}
                     </span>
@@ -225,6 +226,7 @@
                   <td class="cell-name">
                     <span class="cat-dot" :style="{ background: categoryColor(item.category, allExpenseCategories) }"></span>
                     <input type="text" v-model="item.name" :title="item.name" @change="saveExpenses">
+                    <span v-if="item.createdAt" class="created-badge">{{ formatCreatedAt(item.createdAt) }}</span>
                   </td>
                   <td class="amt-col" :data-label="t('amount')"><input type="number" v-model.number="item.amount" step="1" @change="saveExpenses"></td>
                   <td class="cur-col" :data-label="t('currency')">
@@ -349,10 +351,11 @@
                 </tr>
               </thead>
               <TransitionGroup tag="tbody" name="row">
-                <tr v-for="item in savings" :key="keyFor(item)">
+                <tr v-for="item in sortedSavings" :key="keyFor(item)">
                   <td class="cell-name">
                     <span class="cat-dot" :style="{ background: categoryColor(item.category, allSavingsCategories) }"></span>
                     <input type="text" v-model="item.name" :title="item.name" @change="saveSavings">
+                    <span v-if="item.createdAt" class="created-badge">{{ formatCreatedAt(item.createdAt) }}</span>
                   </td>
                   <td class="amt-col" :data-label="t('amount')"><input type="number" v-model.number="item.amount" step="1" @change="saveSavings"></td>
                   <td class="cur-col" :data-label="t('currency')">
@@ -1040,12 +1043,12 @@ function focusNewRow(tableRef) {
 }
 
 function addRow(arr, name, save, tableRef) {
-  arr.push({ id: generateId(), name, amount: 0, currency: 'RSD', freq: 1, active: true, endPeriod: null, category: 'Ostalo' });
+  arr.push({ id: generateId(), name, amount: 0, currency: 'RSD', freq: 1, active: true, endPeriod: null, category: 'Ostalo', createdAt: Date.now() });
   save();
   focusNewRow(tableRef);
 }
 function addSavingsRow() {
-  savings.push({ id: generateId(), name: t('newSavingName'), amount: 0, currency: 'RSD', category: 'Ostalo' });
+  savings.push({ id: generateId(), name: t('newSavingName'), amount: 0, currency: 'RSD', category: 'Ostalo', createdAt: Date.now() });
   saveSavings();
   focusNewRow(savingsTableRef);
 }
@@ -1242,9 +1245,14 @@ const showOneTimeIncome = ref(false);
 const oneTimeExpensesCount = computed(() => expenses.filter(it => it.freq === 0).length);
 const oneTimeIncomeCount = computed(() => income.filter(it => it.freq === 0).length);
 
+function byNewestFirst(a, b) {
+  return (b.createdAt || 0) - (a.createdAt || 0);
+}
+
 const visibleExpenses = computed(() => {
-  const recurring = expenses.filter(it => it.freq !== 0);
-  return showOneTimeExpenses.value ? [...recurring, ...expenses.filter(it => it.freq === 0)] : recurring;
+  const recurring = expenses.filter(it => it.freq !== 0).slice().sort(byNewestFirst);
+  const oneTime = expenses.filter(it => it.freq === 0).slice().sort(byNewestFirst);
+  return showOneTimeExpenses.value ? [...recurring, ...oneTime] : recurring;
 });
 function onExpenseFreqChange(item) {
   if (item.freq === 0) showOneTimeExpenses.value = true;
@@ -1256,9 +1264,12 @@ function onIncomeFreqChange(item) {
 }
 
 const visibleIncome = computed(() => {
-  const recurring = income.filter(it => it.freq !== 0);
-  return showOneTimeIncome.value ? [...recurring, ...income.filter(it => it.freq === 0)] : recurring;
+  const recurring = income.filter(it => it.freq !== 0).slice().sort(byNewestFirst);
+  const oneTime = income.filter(it => it.freq === 0).slice().sort(byNewestFirst);
+  return showOneTimeIncome.value ? [...recurring, ...oneTime] : recurring;
 });
+
+const sortedSavings = computed(() => savings.slice().sort(byNewestFirst));
 
 const expThis = computed(() => expenses.reduce((sum, it) => (isExpenseActive(it) && !it.paidFromSavings) ? sum + toRSD(it.amount, it.currency) : sum, 0));
 const recurringExpTotal = computed(() => expenses.reduce((sum, it) => (isExpenseActive(it) && it.freq !== 0 && !it.paidFromSavings) ? sum + toRSD(it.amount, it.currency) : sum, 0));
@@ -1505,13 +1516,13 @@ async function sendChatMessage() {
 function applyChatAction(msg) {
   const { action, name, amount, currency, freq, category } = msg.confirm;
   if (action === 'add_expense') {
-    expenses.push({ id: generateId(), name, amount, currency, freq, active: true, endPeriod: null, category: category || 'Ostalo' });
+    expenses.push({ id: generateId(), name, amount, currency, freq, active: true, endPeriod: null, category: category || 'Ostalo', createdAt: Date.now() });
     saveExpenses();
   } else if (action === 'add_income') {
-    income.push({ id: generateId(), name, amount, currency, freq, active: true });
+    income.push({ id: generateId(), name, amount, currency, freq, active: true, createdAt: Date.now() });
     saveIncome();
   } else if (action === 'add_saving') {
-    savings.push({ id: generateId(), name, amount, currency, category: category || 'Ostalo' });
+    savings.push({ id: generateId(), name, amount, currency, category: category || 'Ostalo', createdAt: Date.now() });
     saveSavings();
   }
   msg.confirm = null;
@@ -1666,6 +1677,13 @@ function monthAbbrev(period) {
 function formatEndPeriod(period) {
   const [y] = period.split('-');
   return monthAbbrev(period) + ' ' + y;
+}
+
+function formatCreatedAt(timestamp) {
+  const d = new Date(timestamp);
+  const day = d.getDate();
+  const month = MONTH_NAMES.value[d.getMonth()].slice(0, 3);
+  return lang.value === 'en' ? `${month} ${day}` : `${day}. ${month.toLowerCase()}`;
 }
 
 const editingEndPeriod = ref(null);
@@ -1997,7 +2015,7 @@ function switchLangUrl(target) {
 }
 .category-manage-actions{ display:flex; align-items:center; gap:2px; flex-shrink:0; }
 .source-col{ width:130px; }
-.diverted-badge{
+.diverted-badge, .created-badge{
   display:block; font-family:'Inter',sans-serif; font-size:11px; color:var(--ink-light);
   white-space:normal;
 }
@@ -2260,8 +2278,9 @@ function switchLangUrl(target) {
   .page td[data-label] input, .page td[data-label] select{ text-align:right; }
   .page td[data-label]:last-of-type{ border-bottom:none; }
 
-  .page td.cell-name{ display:flex; align-items:center; gap:6px; font-size:14px; padding:6px 0; border-bottom:1px solid var(--border); }
+  .page td.cell-name{ display:flex; flex-wrap:wrap; align-items:center; gap:2px 6px; font-size:14px; padding:6px 0; border-bottom:1px solid var(--border); }
   .page td.cell-name input{ font-size:14px; font-weight:600; text-overflow:ellipsis; }
+  .page td.cell-name .diverted-badge, .page td.cell-name .created-badge{ flex-basis:100%; }
   .cat-dot{ display:inline-block; }
 
   .page td.amt-col{ display:inline-flex; width:58%; border-bottom:none; }
