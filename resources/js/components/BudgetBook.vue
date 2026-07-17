@@ -217,6 +217,7 @@
                   <th class="freq-col">{{ t('frequency') }}</th>
                   <th class="end-col">{{ t('untilMonth') }}</th>
                   <th class="cat-col">{{ t('category') }}</th>
+                  <th class="source-col">{{ t('pullFromSavingsColumn') }}</th>
                   <th class="chk-col">{{ t('active') }}</th>
                   <th class="del-col"></th>
                 </tr>
@@ -276,26 +277,13 @@
                     </select>
                   </td>
                   <td class="chk-col" :data-label="t('active')"><input type="checkbox" v-model="item.active" @change="saveExpenses"></td>
-                  <td class="del-col">
-                    <div v-if="payingFromSavingsFor === keyFor(item)" class="savings-pick">
-                      <select v-model="payFromSavingsChoice">
-                        <option v-for="s in savings" :key="s.id" :value="s.id">{{ s.name }}</option>
-                      </select>
-                      <button class="del-btn" type="button" @click="confirmPayFromSavings(item, payFromSavingsChoice)" :aria-label="t('confirmBtn')">✓</button>
-                      <button class="del-btn" type="button" @click="cancelPayFromSavings" :aria-label="t('cancelBtn')">✕</button>
-                    </div>
-                    <template v-else>
-                      <button
-                        v-if="savings.length"
-                        class="del-btn savings-btn"
-                        type="button"
-                        :class="{ active: item.paidFromSavings }"
-                        :title="item.paidFromSavings ? t('paidFromSavingsTitle') : t('payFromSavingsTitle')"
-                        @click="item.paidFromSavings ? undoPayFromSavings(item) : startPayFromSavings(item)"
-                      >🏦</button>
-                      <button class="del-btn" @click="removeRow(expenses, item, saveExpenses)" :aria-label="t('deleteRow')"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button>
-                    </template>
+                  <td class="source-col" :data-label="t('pullFromSavingsColumn')">
+                    <select v-if="savings.length" :value="item.paidFromSavings ? item.paidFromSavings.savingsId : ''" @change="onExpenseSourceChange(item, $event)">
+                      <option value="">{{ t('savingsSourceNone') }}</option>
+                      <option v-for="s in savings" :key="s.id" :value="s.id">{{ s.name }}</option>
+                    </select>
                   </td>
+                  <td class="del-col"><button class="del-btn" @click="removeExpenseRow(item)" :aria-label="t('deleteRow')"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
                 </tr>
               </TransitionGroup>
             </table>
@@ -549,10 +537,6 @@ const TRANSLATIONS = {
     fromMonth: 'od',
     oneTime: 'jednokratno',
     deleteRow: 'Obriši red',
-    payFromSavingsTitle: 'Plati iz štednje ovog meseca',
-    paidFromSavingsTitle: 'Plaćeno iz štednje — klikni da vratiš',
-    confirmBtn: 'Potvrdi',
-    cancelBtn: 'Otkaži',
     addCategoryOption: '+ Dodaj kategoriju',
     newCategoryPlaceholder: 'Naziv kategorije',
     didYouMean: 'Misliš na',
@@ -562,6 +546,7 @@ const TRANSLATIONS = {
     renameCategoryTitle: 'Preimenuj kategoriju',
     deleteCategoryTitle: 'Obriši kategoriju',
     pullFromIncome: 'Povuci iz prihoda',
+    pullFromSavingsColumn: 'Izvuci iz',
     savingsSourceNone: 'Ništa',
     divertedToSavingsTitle: 'Povučeno iz ovog primanja u štednju ovog meseca',
     addIncome: 'Dodaj primanje',
@@ -653,10 +638,6 @@ const TRANSLATIONS = {
     fromMonth: 'from',
     oneTime: 'one-time',
     deleteRow: 'Delete row',
-    payFromSavingsTitle: 'Pay from savings this month',
-    paidFromSavingsTitle: 'Paid from savings — click to undo',
-    confirmBtn: 'Confirm',
-    cancelBtn: 'Cancel',
     addCategoryOption: '+ Add category',
     newCategoryPlaceholder: 'Category name',
     didYouMean: 'Did you mean',
@@ -666,6 +647,7 @@ const TRANSLATIONS = {
     renameCategoryTitle: 'Rename category',
     deleteCategoryTitle: 'Delete category',
     pullFromIncome: 'Pull from income',
+    pullFromSavingsColumn: 'Pull from',
     savingsSourceNone: 'Nothing',
     divertedToSavingsTitle: 'Diverted from this income into savings this month',
     addIncome: 'Add income',
@@ -1047,7 +1029,11 @@ function focusNewRow(tableRef, newItem) {
     if (input) {
       input.focus();
       input.select();
-      firstRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // A short delay lets the mobile on-screen keyboard finish opening
+      // first, so the scroll lands correctly against the shrunk viewport.
+      setTimeout(() => {
+        firstRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
     }
   });
 }
@@ -1105,49 +1091,40 @@ function resyncSavingsDiverted() {
   if (changed) saveIncome();
 }
 
-const payingFromSavingsFor = ref(null);
-const payFromSavingsChoice = ref(null);
-
-function startPayFromSavings(item) {
-  if (!savings.length) return;
-  if (savings.length === 1) {
-    confirmPayFromSavings(item, savings[0].id);
-    return;
+function restorePaidFromSavings(item) {
+  const info = item.paidFromSavings;
+  if (!info) return;
+  const savingsItem = savings.find(s => s.id === info.savingsId);
+  if (savingsItem) {
+    const restored = fromRSD(toRSD(info.amount, info.currency), savingsItem.currency);
+    savingsItem.amount = Math.round((savingsItem.amount + restored) * 100) / 100;
   }
-  payFromSavingsChoice.value = savings[0].id;
-  payingFromSavingsFor.value = keyFor(item);
 }
-function cancelPayFromSavings() {
-  payingFromSavingsFor.value = null;
-}
-function confirmPayFromSavings(item, savingsId) {
-  const savingsItem = savings.find(s => s.id === savingsId);
-  if (!savingsItem) return;
 
-  const rsdAmount = toRSD(item.amount, item.currency);
-  const deducted = fromRSD(rsdAmount, savingsItem.currency);
-  savingsItem.amount = Math.round((savingsItem.amount - deducted) * 100) / 100;
+function onExpenseSourceChange(item, event) {
+  const newSavingsId = event.target.value || null;
 
-  item.paidFromSavings = { savingsId, amount: item.amount, currency: item.currency };
+  restorePaidFromSavings(item);
+
+  if (newSavingsId) {
+    const savingsItem = savings.find(s => s.id === newSavingsId);
+    if (savingsItem) {
+      const deducted = fromRSD(toRSD(item.amount, item.currency), savingsItem.currency);
+      savingsItem.amount = Math.round((savingsItem.amount - deducted) * 100) / 100;
+      item.paidFromSavings = { savingsId: newSavingsId, amount: item.amount, currency: item.currency };
+    }
+  } else {
+    item.paidFromSavings = null;
+  }
 
   saveSavings();
   saveExpenses();
-  payingFromSavingsFor.value = null;
 }
-function undoPayFromSavings(item) {
-  const info = item.paidFromSavings;
-  if (!info) return;
 
-  const savingsItem = savings.find(s => s.id === info.savingsId);
-  if (savingsItem) {
-    const rsdAmount = toRSD(info.amount, info.currency);
-    const restored = fromRSD(rsdAmount, savingsItem.currency);
-    savingsItem.amount = Math.round((savingsItem.amount + restored) * 100) / 100;
-    saveSavings();
-  }
-
-  item.paidFromSavings = null;
-  saveExpenses();
+function removeExpenseRow(item) {
+  restorePaidFromSavings(item);
+  saveSavings();
+  removeRow(expenses, item, saveExpenses);
 }
 
 function resetAll() {
@@ -2000,14 +1977,7 @@ function switchLangUrl(target) {
 .end-col{ width:118px; }
 .cat-col{ width:110px; }
 .chk-col{ width:36px; text-align:center; }
-.del-col{ width:52px; text-align:center; white-space:nowrap; }
-.savings-btn{ opacity:0.5; font-size:13px; }
-.savings-btn.active{ opacity:1; }
-.savings-pick{ display:inline-flex; align-items:center; gap:2px; }
-.savings-pick select{
-  font-family:'Inter',sans-serif; font-size:11px; color:var(--ink); background:transparent;
-  border:1px solid var(--border); border-radius:4px; max-width:76px; padding:2px;
-}
+.del-col{ width:30px; text-align:center; white-space:nowrap; }
 .cat-suggest{
   display:flex; align-items:center; gap:4px; font-family:'Inter',sans-serif;
   font-size:11px; color:var(--ink-light); white-space:normal;
