@@ -31,4 +31,32 @@ class BudgetSavingsDivertedTest extends TestCase
 
         $this->assertEquals(90000, $months['2026-07']['income']);
     }
+
+    public function test_diverted_amount_larger_than_the_income_itself_floors_at_zero_not_negative(): void
+    {
+        $this->travelTo('2026-07-15');
+
+        $user = User::factory()->create();
+
+        BudgetData::create([
+            'user_id' => $user->id,
+            'key' => 'income-items',
+            'period' => '2026-07',
+            'value' => json_encode([
+                ['id' => 'gift-1', 'name' => 'Gift', 'amount' => 100, 'currency' => 'EUR', 'freq' => 0, 'active' => true, 'savingsDiverted' => 400],
+            ]),
+        ]);
+        BudgetData::create([
+            'user_id' => $user->id,
+            'key' => 'expense-rates',
+            'period' => '2026-07',
+            'value' => json_encode(['usd' => 100, 'eur' => 100]),
+        ]);
+
+        $response = $this->actingAs($user)->getJson('/api/budget/yearly');
+        $months = collect($response->json('months'))->keyBy('period');
+
+        // 100 EUR income with 400 EUR "diverted" should floor at 0, not go to -300 EUR worth.
+        $this->assertEquals(0, $months['2026-07']['income']);
+    }
 }

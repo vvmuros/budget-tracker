@@ -25,10 +25,13 @@ $t = fn ($sr, $en) => $lang === 'en' ? $en : $sr;
 <style>
   @page { margin: 28px 36px; }
   body{ font-family: 'DejaVu Sans', sans-serif; color:#161B26; font-size:12px; }
-  .header{ display:table; width:100%; margin-bottom:18px; border-bottom:2px solid #0D9488; padding-bottom:12px; }
+  .header{ width:100%; margin-bottom:18px; border-bottom:2px solid #0D9488; padding-bottom:12px; }
+  .header-row{ display:table; width:100%; }
+  .header-cell{ display:table-cell; vertical-align:bottom; }
+  .header-cell.right{ text-align:right; }
   .brand{ font-size:22px; font-weight:700; color:#0D9488; }
   .subtitle{ font-size:11px; color:#69718A; margin-top:2px; }
-  .period{ font-size:15px; font-weight:700; float:right; color:#161B26; }
+  .period{ font-size:15px; font-weight:700; color:#161B26; }
 
   .summary{ width:100%; margin:18px 0 22px 0; }
   .summary-cell{
@@ -66,9 +69,15 @@ $t = fn ($sr, $en) => $lang === 'en' ? $en : $sr;
 <body>
 
   <div class="header">
-    <div class="brand">Bilanso</div>
-    <div class="subtitle">{{ $t('Mesečni izveštaj', 'Monthly report') }}</div>
-    <div class="period">{{ $monthLabel }}</div>
+    <div class="header-row">
+      <div class="header-cell">
+        <div class="brand">Bilanso</div>
+        <div class="subtitle">{{ $t('Mesečni izveštaj', 'Monthly report') }}</div>
+      </div>
+      <div class="header-cell right">
+        <div class="period">{{ $monthLabel }}</div>
+      </div>
+    </div>
   </div>
 
   <div class="summary">

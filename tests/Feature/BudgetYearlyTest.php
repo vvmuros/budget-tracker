@@ -64,6 +64,29 @@ class BudgetYearlyTest extends TestCase
         $this->assertSame([], $response->json('months'));
     }
 
+    public function test_foreign_currency_items_use_sensible_default_rates_when_none_were_ever_saved(): void
+    {
+        $this->travelTo('2026-07-15');
+
+        $user = User::factory()->create();
+
+        // No expense-rates row at all for this user — should fall back to the
+        // app's real default rates, not price EUR/USD items at 0 RSD.
+        BudgetData::create([
+            'user_id' => $user->id,
+            'key' => 'expense-items',
+            'period' => '2026-07',
+            'value' => json_encode([
+                ['name' => 'Graza', 'amount' => 100, 'currency' => 'EUR', 'freq' => 1, 'active' => true],
+            ]),
+        ]);
+
+        $response = $this->actingAs($user)->getJson('/api/budget/yearly');
+        $months = collect($response->json('months'))->keyBy('period');
+
+        $this->assertGreaterThan(0, $months['2026-07']['expense'], 'A 100 EUR expense should not price at 0 RSD');
+    }
+
     public function test_expense_with_an_end_month_stops_counting_after_it_passes(): void
     {
         $this->travelTo('2026-09-15');

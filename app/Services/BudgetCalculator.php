@@ -13,9 +13,17 @@ use Illuminate\Support\Collection;
  */
 class BudgetCalculator
 {
+    /**
+     * Falls back to these when a user has never saved a rate (e.g. no
+     * expense-rates row exists yet for any period) — matches the frontend's
+     * own default so foreign-currency items don't silently price at 0 RSD
+     * server-side while the book view shows them normally.
+     */
+    public const DEFAULT_RATES = ['usd' => 102.76, 'eur' => 117.36];
+
     public function calculateNet(Collection $rows, ?string $period = null): ?float
     {
-        $rates = json_decode($rows->get('expense-rates', '{}'), true) ?: ['usd' => 0, 'eur' => 0];
+        $rates = json_decode($rows->get('expense-rates', '{}'), true) ?: self::DEFAULT_RATES;
 
         return $this->sumActiveItems($rows->get('income-items', '[]'), $rates, $period)
             - $this->sumActiveItems($rows->get('expense-items', '[]'), $rates, $period);
@@ -30,7 +38,7 @@ class BudgetCalculator
             ->sum(function ($it) use ($rates) {
                 $currency = $it['currency'] ?? 'RSD';
                 $amount = $this->toRsd($it['amount'] ?? 0, $currency, $rates);
-                $diverted = $this->toRsd($it['savingsDiverted'] ?? 0, $currency, $rates);
+                $diverted = min($this->toRsd($it['savingsDiverted'] ?? 0, $currency, $rates), $amount);
 
                 return $amount - $diverted;
             });

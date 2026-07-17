@@ -25,7 +25,7 @@ class ReportController extends Controller
         $rates = $this->calc->resolveEffectiveValue($user, 'expense-rates', $period);
         $savingsJson = $user->budgetData()->where('key', 'savings-items')->where('period', 'global')->value('value');
 
-        $ratesArr = json_decode($rates['value'] ?? '{}', true) ?: ['usd' => 0, 'eur' => 0];
+        $ratesArr = json_decode($rates['value'] ?? '{}', true) ?: BudgetCalculator::DEFAULT_RATES;
 
         $incomeValue = $income && ! $income['is_exact'] ? $this->calc->stripOneTimeItems($income['value']) : ($income['value'] ?? '[]');
         $expenseValue = $expense && ! $expense['is_exact'] ? $this->calc->stripOneTimeItems($expense['value']) : ($expense['value'] ?? '[]');

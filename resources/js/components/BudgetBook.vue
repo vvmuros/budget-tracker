@@ -171,8 +171,8 @@
                   <td class="cell-name">
                     <input type="text" v-model="item.name" :title="item.name" @change="saveIncome">
                     <span v-if="item.createdAt" class="created-badge">{{ formatCreatedAt(item.createdAt) }}</span>
-                    <span v-if="divertedForIncome(item.id) > 0" class="diverted-badge" :title="t('divertedToSavingsTitle')">
-                      −{{ fmt(fromRSD(divertedForIncome(item.id), item.currency)) }} {{ item.currency }} → {{ t('savingsAndAssets') }}
+                    <span v-if="divertedForIncome(item.id, toRSD(item.amount, item.currency)) > 0" class="diverted-badge" :title="t('divertedToSavingsTitle')">
+                      −{{ fmt(fromRSD(divertedForIncome(item.id, toRSD(item.amount, item.currency)), item.currency)) }} {{ item.currency }} → {{ t('savingsAndAssets') }}
                     </span>
                   </td>
                   <td class="amt-col" :data-label="t('amount')"><input type="number" v-model.number="item.amount" step="1" @change="saveIncome"></td>
@@ -1114,13 +1114,16 @@ function onSavingsSourceChange(item, event) {
 // How much of a given income item is currently earmarked by savings rows
 // linked to it for the month being viewed — computed live from the savings
 // list so it's always correct, including after amount/currency edits or
-// deleting the linked row (nothing to separately "undo").
-function divertedForIncome(incomeId) {
-  return savings.reduce((sum, s) => (
+// deleting the linked row (nothing to separately "undo"). Capped at the
+// income's own RSD amount so linking a savings item worth more than the
+// income itself can't push that income's net contribution below zero.
+function divertedForIncome(incomeId, capRsd = Infinity) {
+  const total = savings.reduce((sum, s) => (
     s.sourceIncomeId === incomeId && s.sourceIncomePeriod === currentPeriod.value
       ? sum + toRSD(s.amount, s.currency)
       : sum
   ), 0);
+  return Math.min(total, capRsd);
 }
 
 // Mirrors the live diverted total onto the income item's own stored field,
@@ -1130,7 +1133,8 @@ function divertedForIncome(incomeId) {
 function resyncSavingsDiverted() {
   let changed = false;
   income.forEach(it => {
-    const converted = fromRSD(divertedForIncome(it.id), it.currency);
+    const capRsd = toRSD(it.amount, it.currency);
+    const converted = fromRSD(divertedForIncome(it.id, capRsd), it.currency);
     if (Math.round((it.savingsDiverted || 0) * 100) !== Math.round(converted * 100)) {
       it.savingsDiverted = converted;
       changed = true;
@@ -1310,7 +1314,11 @@ const sortedSavings = computed(() => savings.slice().sort(byNewestFirst));
 
 const expThis = computed(() => expenses.reduce((sum, it) => (isExpenseActive(it) && !it.paidFromSavings) ? sum + toRSD(it.amount, it.currency) : sum, 0));
 const recurringExpTotal = computed(() => expenses.reduce((sum, it) => (isExpenseActive(it) && it.freq !== 0 && !it.paidFromSavings) ? sum + toRSD(it.amount, it.currency) : sum, 0));
-const incThis = computed(() => income.reduce((sum, it) => isIncomeActive(it) ? sum + toRSD(it.amount, it.currency) - divertedForIncome(it.id) : sum, 0));
+const incThis = computed(() => income.reduce((sum, it) => {
+  if (!isIncomeActive(it)) return sum;
+  const rsd = toRSD(it.amount, it.currency);
+  return sum + rsd - divertedForIncome(it.id, rsd);
+}, 0));
 const expAvg = computed(() => expenses.reduce((sum, it) => {
   if (!it.active || (it.endPeriod && currentPeriod.value > it.endPeriod)) return sum;
   const r = toRSD(it.amount, it.currency);
