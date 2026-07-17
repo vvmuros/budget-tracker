@@ -170,8 +170,8 @@
                 <tr v-for="item in visibleIncome" :key="keyFor(item)" :class="{ inactive: !isIncomeActive(item) }">
                   <td class="cell-name">
                     <input type="text" v-model="item.name" :title="item.name" @change="saveIncome">
-                    <span v-if="item.savingsDiverted > 0" class="diverted-badge" :title="t('divertedToSavingsTitle')">
-                      −{{ fmt(item.savingsDiverted) }} {{ item.currency }} → {{ t('savingsAndAssets') }}
+                    <span v-if="divertedForIncome(item.id) > 0" class="diverted-badge" :title="t('divertedToSavingsTitle')">
+                      −{{ fmt(fromRSD(divertedForIncome(item.id), item.currency)) }} {{ item.currency }} → {{ t('savingsAndAssets') }}
                     </span>
                   </td>
                   <td class="amt-col" :data-label="t('amount')"><input type="number" v-model.number="item.amount" step="1" @change="saveIncome"></td>
@@ -344,6 +344,7 @@
                   <th class="amt-col">{{ t('amount') }}</th>
                   <th class="cur-col">{{ t('currency') }}</th>
                   <th class="cat-col">{{ t('category') }}</th>
+                  <th class="source-col">{{ t('pullFromIncome') }}</th>
                   <th class="del-col"></th>
                 </tr>
               </thead>
@@ -377,25 +378,17 @@
                       <option value="__add__">{{ t('addCategoryOption') }}</option>
                     </select>
                   </td>
-                  <td class="del-col"><button class="del-btn" @click="removeSavingsRow(item)" :aria-label="t('deleteRow')"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
+                  <td class="source-col" :data-label="t('pullFromIncome')">
+                    <select :value="item.sourceIncomeId || ''" @change="onSavingsSourceChange(item, $event)">
+                      <option value="">{{ t('savingsSourceNone') }}</option>
+                      <option v-for="it in income" :key="it.id" :value="it.id">{{ it.name }}</option>
+                    </select>
+                  </td>
+                  <td class="del-col"><button class="del-btn" @click="removeRow(savings, item, saveSavings)" :aria-label="t('deleteRow')"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
                 </tr>
               </TransitionGroup>
             </table>
-            <div class="add-savings-row">
-              <button v-if="!pullingFromIncome" class="add-row" @click="addSavingsRow"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addSaving') }}</button>
-              <select v-if="income.length" v-model="pullingFromIncome" class="savings-source-select">
-                <option :value="false">{{ t('savingsSourceNone') }}</option>
-                <option :value="true">{{ t('pullFromIncome') }}</option>
-              </select>
-            </div>
-            <div v-if="pullingFromIncome" class="pull-income-form">
-              <select v-model="pullIncomeChoice">
-                <option v-for="it in income" :key="it.id" :value="it.id">{{ it.name }}</option>
-              </select>
-              <input type="number" v-model.number="pullAmount" min="0" step="1" :placeholder="t('amount')" class="pull-income-input">
-              <button type="button" class="del-btn" @click="confirmSavingsFromIncome" :aria-label="t('confirmBtn')">✓</button>
-              <button type="button" class="del-btn" @click="pullingFromIncome = false" :aria-label="t('cancelBtn')">✕</button>
-            </div>
+            <button class="add-row" @click="addSavingsRow"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addSaving') }}</button>
 
             <div v-if="customSavingsCategories.length" class="category-manage">
               <button type="button" class="reset-link load-more-btn" @click="showManageSavingsCategories = !showManageSavingsCategories">
@@ -567,7 +560,6 @@ const TRANSLATIONS = {
     deleteCategoryTitle: 'Obriši kategoriju',
     pullFromIncome: 'Povuci iz prihoda',
     savingsSourceNone: 'Ništa',
-    fromIncomePrefix: 'Iz:',
     divertedToSavingsTitle: 'Povučeno iz ovog primanja u štednju ovog meseca',
     addIncome: 'Dodaj primanje',
     addExpense: 'Dodaj trošak',
@@ -672,7 +664,6 @@ const TRANSLATIONS = {
     deleteCategoryTitle: 'Delete category',
     pullFromIncome: 'Pull from income',
     savingsSourceNone: 'Nothing',
-    fromIncomePrefix: 'From:',
     divertedToSavingsTitle: 'Diverted from this income into savings this month',
     addIncome: 'Add income',
     addExpense: 'Add expense',
@@ -1021,7 +1012,10 @@ function persist(key, value, period = null) {
 }
 function saveExpenses() { persist('expense-items', expenses, currentPeriod.value); }
 function saveIncome() { persist('income-items', income, currentPeriod.value); }
-function saveSavings() { persist('savings-items', savings); }
+function saveSavings() {
+  resyncSavingsDiverted();
+  persist('savings-items', savings);
+}
 function saveRates() { persist('expense-rates', rates, currentPeriod.value); }
 
 const incomeTableRef = ref(null);
@@ -1061,45 +1055,39 @@ function removeRow(arr, item, save) {
   save();
 }
 
-const pullingFromIncome = ref(false);
-const pullIncomeChoice = ref(null);
-const pullAmount = ref(0);
-
-function confirmSavingsFromIncome() {
-  const incomeItem = income.find(it => it.id === pullIncomeChoice.value);
-  const amount = Number(pullAmount.value) || 0;
-  if (!incomeItem || amount <= 0) return;
-
-  incomeItem.savingsDiverted = (incomeItem.savingsDiverted || 0) + amount;
-  saveIncome();
-
-  savings.push({
-    id: generateId(),
-    name: `${t('fromIncomePrefix')} ${incomeItem.name}`,
-    amount,
-    currency: incomeItem.currency,
-    category: 'Štednja',
-    sourceIncomeId: incomeItem.id,
-    sourceIncomePeriod: currentPeriod.value,
-  });
+function onSavingsSourceChange(item, event) {
+  const value = event.target.value;
+  item.sourceIncomeId = value || null;
+  item.sourceIncomePeriod = value ? currentPeriod.value : null;
   saveSavings();
-
-  pullAmount.value = 0;
-  pullingFromIncome.value = false;
 }
 
-// If this savings row was created by diverting from an income item and
-// we're still on the same month it was diverted from, give that amount
-// back to the income item before removing the row.
-function removeSavingsRow(item) {
-  if (item.sourceIncomeId && item.sourceIncomePeriod === currentPeriod.value) {
-    const incomeItem = income.find(it => it.id === item.sourceIncomeId);
-    if (incomeItem) {
-      incomeItem.savingsDiverted = Math.max(0, (incomeItem.savingsDiverted || 0) - item.amount);
-      saveIncome();
+// How much of a given income item is currently earmarked by savings rows
+// linked to it for the month being viewed — computed live from the savings
+// list so it's always correct, including after amount/currency edits or
+// deleting the linked row (nothing to separately "undo").
+function divertedForIncome(incomeId) {
+  return savings.reduce((sum, s) => (
+    s.sourceIncomeId === incomeId && s.sourceIncomePeriod === currentPeriod.value
+      ? sum + toRSD(s.amount, s.currency)
+      : sum
+  ), 0);
+}
+
+// Mirrors the live diverted total onto the income item's own stored field,
+// so the backend (yearly chart, monthly reminder) — which only sees this
+// month's saved income JSON, not the separate global savings list — agrees
+// with what the current-month view shows.
+function resyncSavingsDiverted() {
+  let changed = false;
+  income.forEach(it => {
+    const converted = fromRSD(divertedForIncome(it.id), it.currency);
+    if (Math.round((it.savingsDiverted || 0) * 100) !== Math.round(converted * 100)) {
+      it.savingsDiverted = converted;
+      changed = true;
     }
-  }
-  removeRow(savings, item, saveSavings);
+  });
+  if (changed) saveIncome();
 }
 
 const payingFromSavingsFor = ref(null);
@@ -1274,7 +1262,7 @@ const visibleIncome = computed(() => {
 
 const expThis = computed(() => expenses.reduce((sum, it) => (isExpenseActive(it) && !it.paidFromSavings) ? sum + toRSD(it.amount, it.currency) : sum, 0));
 const recurringExpTotal = computed(() => expenses.reduce((sum, it) => (isExpenseActive(it) && it.freq !== 0 && !it.paidFromSavings) ? sum + toRSD(it.amount, it.currency) : sum, 0));
-const incThis = computed(() => income.reduce((sum, it) => isIncomeActive(it) ? sum + toRSD(it.amount, it.currency) - toRSD(it.savingsDiverted || 0, it.currency) : sum, 0));
+const incThis = computed(() => income.reduce((sum, it) => isIncomeActive(it) ? sum + toRSD(it.amount, it.currency) - divertedForIncome(it.id) : sum, 0));
 const expAvg = computed(() => expenses.reduce((sum, it) => {
   if (!it.active || (it.endPeriod && currentPeriod.value > it.endPeriod)) return sum;
   const r = toRSD(it.amount, it.currency);
@@ -2008,23 +1996,7 @@ function switchLangUrl(target) {
   background:transparent; border:none; border-bottom:1px solid var(--gilt); padding:2px; flex:1;
 }
 .category-manage-actions{ display:flex; align-items:center; gap:2px; flex-shrink:0; }
-.add-savings-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-.savings-source-select{
-  font-family:'Inter',sans-serif; font-size:12.5px; color:var(--ink-light); background:transparent;
-  border:1px solid var(--border); border-radius:8px; padding:6px 8px;
-}
-.pull-income-form{
-  display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:6px;
-  padding:8px; border:1px solid var(--border); border-radius:10px;
-}
-.pull-income-form select{
-  font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); background:transparent;
-  border:1px solid var(--border); border-radius:6px; padding:4px 6px;
-}
-.pull-income-input{
-  width:90px; font-family:'Inter',sans-serif; font-size:13px; color:var(--ink);
-  background:transparent; border:1px solid var(--border); border-radius:6px; padding:4px 6px;
-}
+.source-col{ width:130px; }
 .diverted-badge{
   display:block; font-family:'Inter',sans-serif; font-size:11px; color:var(--ink-light);
   white-space:normal;
@@ -2264,7 +2236,7 @@ function switchLangUrl(target) {
 
   .page table, .page thead, .page tbody, .page tr, .page td{ display:block; }
   .page thead{ display:none; }
-  .amt-col, .cur-col, .freq-col, .end-col, .cat-col, .chk-col, .del-col{ width:auto; }
+  .amt-col, .cur-col, .freq-col, .end-col, .cat-col, .chk-col, .del-col, .source-col{ width:auto; }
 
   .page tbody tr{
     position:relative;
