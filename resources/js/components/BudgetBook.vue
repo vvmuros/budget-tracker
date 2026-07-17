@@ -582,7 +582,7 @@ const TRANSLATIONS = {
     deleteCategoryTitle: 'Obriši kategoriju',
     pullFromIncome: 'Povuci iz prihoda',
     pullFromSavingsColumn: 'Izvuci iz',
-    savingsSourceNone: 'Ništa',
+    savingsSourceNone: '/',
     divertedToSavingsTitle: 'Povučeno iz ovog primanja u štednju ovog meseca',
     addIncome: 'Dodaj primanje',
     addExpense: 'Dodaj trošak',
@@ -685,7 +685,7 @@ const TRANSLATIONS = {
     deleteCategoryTitle: 'Delete category',
     pullFromIncome: 'Pull from income',
     pullFromSavingsColumn: 'Pull from',
-    savingsSourceNone: 'Nothing',
+    savingsSourceNone: '/',
     divertedToSavingsTitle: 'Diverted from this income into savings this month',
     addIncome: 'Add income',
     addExpense: 'Add expense',
@@ -1040,19 +1040,12 @@ function saveSavings() {
 }
 function saveRates() { persist('expense-rates', rates, currentPeriod.value); }
 
-// New items land at the top of the (possibly long) list, which can be well
-// above the "Add" button/form the user is currently looking at — scroll to
-// it and flash it so it's obvious where it landed. This runs after the
-// quick-add form has already closed, with nothing needing focus, so unlike
-// the old auto-focus approach it can't interfere with the mobile keyboard.
+// New items land at the top of the (possibly long) list, so a brief flash
+// marks where one just appeared instead of relying on scrolling to it.
 const newlyAddedKey = ref(null);
 function flashNewItem(item) {
   const key = keyFor(item);
   newlyAddedKey.value = key;
-  nextTick(() => {
-    const row = document.querySelector(`[data-row-key="${CSS.escape(String(key))}"]`);
-    row?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  });
   setTimeout(() => {
     if (newlyAddedKey.value === key) newlyAddedKey.value = null;
   }, 900);
