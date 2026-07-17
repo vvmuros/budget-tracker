@@ -2477,9 +2477,6 @@ function switchLangUrl(target) {
   .page td.cur-col[data-label]::before{ display:none; }
   .page td.cur-col select{ text-align:left; }
 
-  .page td.end-col{ display:inline-flex; width:48%; border-bottom:none; }
-  .page td.cat-col{ display:inline-flex; width:50%; }
-
   .page td.chk-col{ padding:3px 0; }
 
   .page td.del-col{
