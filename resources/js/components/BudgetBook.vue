@@ -155,7 +155,7 @@
             </div>
 
             <div class="section-title">{{ t('income') }}</div>
-            <table ref="incomeTableRef">
+            <table>
               <thead>
                 <tr>
                   <th style="width:auto">{{ t('item') }}</th>
@@ -202,13 +202,24 @@
                 </tr>
               </TransitionGroup>
             </table>
-            <button class="add-row" @click="addRow(income, t('newIncomeName'), saveIncome, incomeTableRef)"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addIncome') }}</button>
+            <button v-if="!quickAdd || quickAdd.kind !== 'income'" class="add-row" @click="startQuickAdd('income')"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addIncome') }}</button>
+            <div v-if="quickAdd && quickAdd.kind === 'income'" class="quick-add-form">
+              <input type="text" v-model="quickAdd.name" :placeholder="t('newIncomeName')" autofocus class="quick-add-name" @keyup.enter="confirmQuickAdd">
+              <input type="number" v-model.number="quickAdd.amount" :placeholder="t('amount')" class="quick-add-amount" @keyup.enter="confirmQuickAdd">
+              <select v-model="quickAdd.currency">
+                <option value="RSD">RSD</option>
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+              </select>
+              <button type="button" class="del-btn" @click="confirmQuickAdd" :aria-label="t('confirmAdd')">✓</button>
+              <button type="button" class="del-btn" @click="cancelQuickAdd" :aria-label="t('cancelAdd')">✕</button>
+            </div>
             <button v-if="oneTimeIncomeCount > 0" class="reset-link load-more-btn" @click="showOneTimeIncome = !showOneTimeIncome">
               {{ showOneTimeIncome ? t('hideOneTimeIncome') : t('showOneTimeIncome') }} ({{ oneTimeIncomeCount }})
             </button>
 
             <div class="section-title">{{ t('expenses') }}</div>
-            <table ref="expenseTableRef">
+            <table>
               <thead>
                 <tr>
                   <th style="width:auto">{{ t('item') }}</th>
@@ -287,7 +298,18 @@
                 </tr>
               </TransitionGroup>
             </table>
-            <button class="add-row" @click="addRow(expenses, t('newExpenseName'), saveExpenses, expenseTableRef)"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addExpense') }}</button>
+            <button v-if="!quickAdd || quickAdd.kind !== 'expense'" class="add-row" @click="startQuickAdd('expense')"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addExpense') }}</button>
+            <div v-if="quickAdd && quickAdd.kind === 'expense'" class="quick-add-form">
+              <input type="text" v-model="quickAdd.name" :placeholder="t('newExpenseName')" autofocus class="quick-add-name" @keyup.enter="confirmQuickAdd">
+              <input type="number" v-model.number="quickAdd.amount" :placeholder="t('amount')" class="quick-add-amount" @keyup.enter="confirmQuickAdd">
+              <select v-model="quickAdd.currency">
+                <option value="RSD">RSD</option>
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+              </select>
+              <button type="button" class="del-btn" @click="confirmQuickAdd" :aria-label="t('confirmAdd')">✓</button>
+              <button type="button" class="del-btn" @click="cancelQuickAdd" :aria-label="t('cancelAdd')">✕</button>
+            </div>
             <button v-if="oneTimeExpensesCount > 0" class="reset-link load-more-btn" @click="showOneTimeExpenses = !showOneTimeExpenses">
               {{ showOneTimeExpenses ? t('hideOneTimeExpenses') : t('showOneTimeExpenses') }} ({{ oneTimeExpensesCount }})
             </button>
@@ -327,7 +349,7 @@
             </div>
 
             <div class="section-title">{{ t('savingsAndAssets') }}</div>
-            <table ref="savingsTableRef">
+            <table>
               <thead>
                 <tr>
                   <th style="width:auto">{{ t('item') }}</th>
@@ -379,7 +401,18 @@
                 </tr>
               </TransitionGroup>
             </table>
-            <button class="add-row" @click="addSavingsRow"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addSaving') }}</button>
+            <button v-if="!quickAdd || quickAdd.kind !== 'savings'" class="add-row" @click="startQuickAdd('savings')"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addSaving') }}</button>
+            <div v-if="quickAdd && quickAdd.kind === 'savings'" class="quick-add-form">
+              <input type="text" v-model="quickAdd.name" :placeholder="t('newSavingName')" autofocus class="quick-add-name" @keyup.enter="confirmQuickAdd">
+              <input type="number" v-model.number="quickAdd.amount" :placeholder="t('amount')" class="quick-add-amount" @keyup.enter="confirmQuickAdd">
+              <select v-model="quickAdd.currency">
+                <option value="RSD">RSD</option>
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+              </select>
+              <button type="button" class="del-btn" @click="confirmQuickAdd" :aria-label="t('confirmAdd')">✓</button>
+              <button type="button" class="del-btn" @click="cancelQuickAdd" :aria-label="t('cancelAdd')">✕</button>
+            </div>
 
             <div v-if="customSavingsCategories.length" class="category-manage">
               <button type="button" class="reset-link load-more-btn" @click="showManageSavingsCategories = !showManageSavingsCategories">
@@ -537,6 +570,8 @@ const TRANSLATIONS = {
     fromMonth: 'od',
     oneTime: 'jednokratno',
     deleteRow: 'Obriši red',
+    confirmAdd: 'Dodaj',
+    cancelAdd: 'Otkaži',
     addCategoryOption: '+ Dodaj kategoriju',
     newCategoryPlaceholder: 'Naziv kategorije',
     didYouMean: 'Misliš na',
@@ -638,6 +673,8 @@ const TRANSLATIONS = {
     fromMonth: 'from',
     oneTime: 'one-time',
     deleteRow: 'Delete row',
+    confirmAdd: 'Add',
+    cancelAdd: 'Cancel',
     addCategoryOption: '+ Add category',
     newCategoryPlaceholder: 'Category name',
     didYouMean: 'Did you mean',
@@ -1003,75 +1040,58 @@ function saveSavings() {
 }
 function saveRates() { persist('expense-rates', rates, currentPeriod.value); }
 
-const incomeTableRef = ref(null);
-const expenseTableRef = ref(null);
-const savingsTableRef = ref(null);
-
-// New rows land at the bottom of what can be a long list — scroll to it and
-// focus the name field so adding one is never mistaken for "nothing happened".
+// New items land at the top of the (possibly long) list, so a brief flash
+// marks where one just appeared instead of relying on scrolling to it.
 const newlyAddedKey = ref(null);
+function flashNewItem(item) {
+  const key = keyFor(item);
+  newlyAddedKey.value = key;
+  setTimeout(() => {
+    if (newlyAddedKey.value === key) newlyAddedKey.value = null;
+  }, 900);
+}
 
-function focusNewRow(tableRef, newItem) {
-  if (newItem) {
-    const key = keyFor(newItem);
-    newlyAddedKey.value = key;
-    setTimeout(() => {
-      if (newlyAddedKey.value === key) newlyAddedKey.value = null;
-    }, 900);
+// Adding used to insert a blank row straight into the (possibly long,
+// possibly scrolled-away) list and then try to focus/scroll to it — on
+// mobile, focusing a row that Vue only just rendered often failed to bring
+// up the on-screen keyboard at all. A small form right under the "Add"
+// button instead means there's nothing to scroll to and nothing unusual
+// about the focus, since the user taps a field that's already on screen.
+const quickAdd = ref(null);
+
+function startQuickAdd(kind) {
+  quickAdd.value = { kind, name: '', amount: 0, currency: 'RSD' };
+}
+function cancelQuickAdd() {
+  quickAdd.value = null;
+}
+function confirmQuickAdd() {
+  const qa = quickAdd.value;
+  if (!qa) return;
+  const name = qa.name.trim();
+  quickAdd.value = null;
+  if (!name) return;
+
+  const base = { id: generateId(), name, amount: qa.amount || 0, currency: qa.currency, createdAt: Date.now() };
+
+  if (qa.kind === 'expense') {
+    const item = { ...base, freq: 1, active: true, endPeriod: null, category: 'Ostalo' };
+    expenses.push(item);
+    saveExpenses();
+    flashNewItem(item);
+  } else if (qa.kind === 'income') {
+    const item = { ...base, freq: 1, active: true };
+    income.push(item);
+    saveIncome();
+    flashNewItem(item);
+  } else if (qa.kind === 'savings') {
+    const item = { ...base, category: 'Ostalo' };
+    savings.push(item);
+    saveSavings();
+    flashNewItem(item);
   }
-  nextTick(() => {
-    const table = tableRef?.value;
-    if (!table) return;
-    // Newest items sort to the top of the list now, so the row to focus
-    // is the first one, not the last.
-    const firstRow = table.querySelector('tbody tr');
-    const input = firstRow?.querySelector('.cell-name input');
-    if (!input) return;
-
-    const scrollToRow = () => firstRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-    // Calling focus() straight out of nextTick's microtask can be too far
-    // removed from the original tap for mobile browsers to treat it as
-    // still tied to the user gesture, so the on-screen keyboard never
-    // opens even though the input visibly becomes focused. Doing it in the
-    // next animation frame instead is a common, more reliable fix. (Also
-    // skip .select() — on some mobile browsers it shows a selection/copy
-    // menu instead of bringing up the keyboard.)
-    requestAnimationFrame(() => input.focus());
-
-    // The on-screen keyboard on mobile resizes the visible viewport, which
-    // can take a variable amount of time — wait for that resize to actually
-    // happen (via visualViewport) instead of guessing a fixed delay, so the
-    // scroll lands correctly instead of firing too early.
-    if (window.visualViewport) {
-      const vv = window.visualViewport;
-      let settled = false;
-      const onResize = () => {
-        if (settled) return;
-        settled = true;
-        vv.removeEventListener('resize', onResize);
-        setTimeout(scrollToRow, 50);
-      };
-      vv.addEventListener('resize', onResize);
-      setTimeout(onResize, 600);
-    } else {
-      setTimeout(scrollToRow, 450);
-    }
-  });
 }
 
-function addRow(arr, name, save, tableRef) {
-  const newItem = { id: generateId(), name, amount: 0, currency: 'RSD', freq: 1, active: true, endPeriod: null, category: 'Ostalo', createdAt: Date.now() };
-  arr.push(newItem);
-  save();
-  focusNewRow(tableRef, newItem);
-}
-function addSavingsRow() {
-  const newItem = { id: generateId(), name: t('newSavingName'), amount: 0, currency: 'RSD', category: 'Ostalo', createdAt: Date.now() };
-  savings.push(newItem);
-  saveSavings();
-  focusNewRow(savingsTableRef, newItem);
-}
 function removeRow(arr, item, save) {
   const idx = arr.indexOf(item);
   if (idx !== -1) arr.splice(idx, 1);
@@ -2004,6 +2024,17 @@ function switchLangUrl(target) {
   display:flex; align-items:center; gap:4px; font-family:'Inter',sans-serif;
   font-size:11px; color:var(--ink-light); white-space:normal;
 }
+.quick-add-form{
+  display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:8px;
+  padding:10px; border:1px solid var(--border); border-radius:10px;
+}
+.quick-add-form input, .quick-add-form select{
+  font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); background:transparent;
+  border:1px solid var(--border); border-radius:6px; padding:6px 8px;
+}
+.quick-add-name{ flex:1 1 160px; min-width:0; }
+.quick-add-amount{ width:100px; }
+
 .category-manage{ margin-top:4px; }
 .category-manage-list{
   display:flex; flex-direction:column; gap:2px; margin-top:6px;
