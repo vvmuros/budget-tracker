@@ -167,7 +167,7 @@
                 </tr>
               </thead>
               <TransitionGroup tag="tbody" name="row">
-                <tr v-for="item in visibleIncome" :key="keyFor(item)" :class="{ inactive: !isIncomeActive(item) }">
+                <tr v-for="item in visibleIncome" :key="keyFor(item)" :class="{ inactive: !isIncomeActive(item), flash: newlyAddedKey === keyFor(item) }">
                   <td class="cell-name">
                     <input type="text" v-model="item.name" :title="item.name" @change="saveIncome">
                     <span v-if="item.createdAt" class="created-badge">{{ formatCreatedAt(item.createdAt) }}</span>
@@ -222,7 +222,7 @@
                 </tr>
               </thead>
               <TransitionGroup tag="tbody" name="row">
-                <tr v-for="item in visibleExpenses" :key="keyFor(item)" :class="{ inactive: !isExpenseActive(item) }">
+                <tr v-for="item in visibleExpenses" :key="keyFor(item)" :class="{ inactive: !isExpenseActive(item), flash: newlyAddedKey === keyFor(item) }">
                   <td class="cell-name">
                     <span class="cat-dot" :style="{ background: categoryColor(item.category, allExpenseCategories) }"></span>
                     <input type="text" v-model="item.name" :title="item.name" @change="saveExpenses">
@@ -351,7 +351,7 @@
                 </tr>
               </thead>
               <TransitionGroup tag="tbody" name="row">
-                <tr v-for="item in sortedSavings" :key="keyFor(item)">
+                <tr v-for="item in sortedSavings" :key="keyFor(item)" :class="{ flash: newlyAddedKey === keyFor(item) }">
                   <td class="cell-name">
                     <span class="cat-dot" :style="{ background: categoryColor(item.category, allSavingsCategories) }"></span>
                     <input type="text" v-model="item.name" :title="item.name" @change="saveSavings">
@@ -1027,30 +1027,42 @@ const savingsTableRef = ref(null);
 
 // New rows land at the bottom of what can be a long list — scroll to it and
 // focus the name field so adding one is never mistaken for "nothing happened".
-function focusNewRow(tableRef) {
+const newlyAddedKey = ref(null);
+
+function focusNewRow(tableRef, newItem) {
+  if (newItem) {
+    const key = keyFor(newItem);
+    newlyAddedKey.value = key;
+    setTimeout(() => {
+      if (newlyAddedKey.value === key) newlyAddedKey.value = null;
+    }, 900);
+  }
   nextTick(() => {
     const table = tableRef?.value;
     if (!table) return;
-    const rows = table.querySelectorAll('tbody tr');
-    const lastRow = rows[rows.length - 1];
-    const input = lastRow?.querySelector('.cell-name input');
+    // Newest items sort to the top of the list now, so the row to focus
+    // is the first one, not the last.
+    const firstRow = table.querySelector('tbody tr');
+    const input = firstRow?.querySelector('.cell-name input');
     if (input) {
       input.focus();
       input.select();
-      lastRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      firstRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   });
 }
 
 function addRow(arr, name, save, tableRef) {
-  arr.push({ id: generateId(), name, amount: 0, currency: 'RSD', freq: 1, active: true, endPeriod: null, category: 'Ostalo', createdAt: Date.now() });
+  const newItem = { id: generateId(), name, amount: 0, currency: 'RSD', freq: 1, active: true, endPeriod: null, category: 'Ostalo', createdAt: Date.now() };
+  arr.push(newItem);
   save();
-  focusNewRow(tableRef);
+  focusNewRow(tableRef, newItem);
 }
 function addSavingsRow() {
-  savings.push({ id: generateId(), name: t('newSavingName'), amount: 0, currency: 'RSD', category: 'Ostalo', createdAt: Date.now() });
+  const newItem = { id: generateId(), name: t('newSavingName'), amount: 0, currency: 'RSD', category: 'Ostalo', createdAt: Date.now() };
+  savings.push(newItem);
   saveSavings();
-  focusNewRow(savingsTableRef);
+  focusNewRow(savingsTableRef, newItem);
 }
 function removeRow(arr, item, save) {
   const idx = arr.indexOf(item);
