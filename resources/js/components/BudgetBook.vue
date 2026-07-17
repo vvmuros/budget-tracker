@@ -1026,14 +1026,36 @@ function focusNewRow(tableRef, newItem) {
     // is the first one, not the last.
     const firstRow = table.querySelector('tbody tr');
     const input = firstRow?.querySelector('.cell-name input');
-    if (input) {
-      input.focus();
-      input.select();
-      // A short delay lets the mobile on-screen keyboard finish opening
-      // first, so the scroll lands correctly against the shrunk viewport.
-      setTimeout(() => {
-        firstRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 300);
+    if (!input) return;
+
+    const scrollToRow = () => firstRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Calling focus() straight out of nextTick's microtask can be too far
+    // removed from the original tap for mobile browsers to treat it as
+    // still tied to the user gesture, so the on-screen keyboard never
+    // opens even though the input visibly becomes focused. Doing it in the
+    // next animation frame instead is a common, more reliable fix. (Also
+    // skip .select() — on some mobile browsers it shows a selection/copy
+    // menu instead of bringing up the keyboard.)
+    requestAnimationFrame(() => input.focus());
+
+    // The on-screen keyboard on mobile resizes the visible viewport, which
+    // can take a variable amount of time — wait for that resize to actually
+    // happen (via visualViewport) instead of guessing a fixed delay, so the
+    // scroll lands correctly instead of firing too early.
+    if (window.visualViewport) {
+      const vv = window.visualViewport;
+      let settled = false;
+      const onResize = () => {
+        if (settled) return;
+        settled = true;
+        vv.removeEventListener('resize', onResize);
+        setTimeout(scrollToRow, 50);
+      };
+      vv.addEventListener('resize', onResize);
+      setTimeout(onResize, 600);
+    } else {
+      setTimeout(scrollToRow, 450);
     }
   });
 }
