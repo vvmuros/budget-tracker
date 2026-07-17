@@ -381,10 +381,13 @@
                 </tr>
               </TransitionGroup>
             </table>
-            <button class="add-row" @click="addSavingsRow"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addSaving') }}</button>
-            <button v-if="income.length" type="button" class="reset-link load-more-btn" @click="pullingFromIncome = !pullingFromIncome">
-              {{ t('pullFromIncome') }}
-            </button>
+            <div class="add-savings-row">
+              <button v-if="!pullingFromIncome" class="add-row" @click="addSavingsRow"><svg viewBox="0 0 16 16" class="icon"><path d="M8 3 V13 M3 8 H13" /></svg> {{ t('addSaving') }}</button>
+              <select v-if="income.length" v-model="pullingFromIncome" class="savings-source-select">
+                <option :value="false">{{ t('savingsSourceNone') }}</option>
+                <option :value="true">{{ t('pullFromIncome') }}</option>
+              </select>
+            </div>
             <div v-if="pullingFromIncome" class="pull-income-form">
               <select v-model="pullIncomeChoice">
                 <option v-for="it in income" :key="it.id" :value="it.id">{{ it.name }}</option>
@@ -563,6 +566,7 @@ const TRANSLATIONS = {
     renameCategoryTitle: 'Preimenuj kategoriju',
     deleteCategoryTitle: 'Obriši kategoriju',
     pullFromIncome: 'Povuci iz prihoda',
+    savingsSourceNone: 'Ništa',
     fromIncomePrefix: 'Iz:',
     divertedToSavingsTitle: 'Povučeno iz ovog primanja u štednju ovog meseca',
     addIncome: 'Dodaj primanje',
@@ -667,6 +671,7 @@ const TRANSLATIONS = {
     renameCategoryTitle: 'Rename category',
     deleteCategoryTitle: 'Delete category',
     pullFromIncome: 'Pull from income',
+    savingsSourceNone: 'Nothing',
     fromIncomePrefix: 'From:',
     divertedToSavingsTitle: 'Diverted from this income into savings this month',
     addIncome: 'Add income',
@@ -2003,6 +2008,11 @@ function switchLangUrl(target) {
   background:transparent; border:none; border-bottom:1px solid var(--gilt); padding:2px; flex:1;
 }
 .category-manage-actions{ display:flex; align-items:center; gap:2px; flex-shrink:0; }
+.add-savings-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.savings-source-select{
+  font-family:'Inter',sans-serif; font-size:12.5px; color:var(--ink-light); background:transparent;
+  border:1px solid var(--border); border-radius:8px; padding:6px 8px;
+}
 .pull-income-form{
   display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:6px;
   padding:8px; border:1px solid var(--border); border-radius:10px;
