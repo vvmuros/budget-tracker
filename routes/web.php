@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\PushController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Route;
@@ -52,6 +53,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/api/budget/analyze', [BudgetController::class, 'analyze'])->middleware(['throttle:6,1', 'gemini.quota'])->name('budget.analyze');
     Route::post('/api/budget/receipt', [BudgetController::class, 'receipt'])->middleware(['throttle:6,1', 'gemini.quota'])->name('budget.receipt');
     Route::post('/api/budget/categories', [BudgetController::class, 'updateCategory'])->middleware('throttle:20,1')->name('budget.categories');
+    Route::get('/api/budget/report/pdf', [ReportController::class, 'monthlyPdf'])->middleware('throttle:10,1')->name('report.monthlyPdf');
 
     Route::get('/api/push/public-key', [PushController::class, 'publicKey'])->name('push.publicKey');
     Route::post('/api/push/subscribe', [PushController::class, 'subscribe'])->name('push.subscribe');

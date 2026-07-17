@@ -491,6 +491,10 @@
                 <svg viewBox="0 0 16 16" class="icon"><circle cx="7" cy="7" r="4.5" /><path d="M10.2 10.2 L14 14" /></svg>
                 {{ analyzing ? t('analyzing') : t('analyzeMonth') }}
               </button>
+              <button class="add-row" type="button" @click="downloadMonthlyPdf">
+                <svg viewBox="0 0 16 16" class="icon"><path d="M4 2 H9 L12 5 V14 H4 Z" /><path d="M9 2 V5 H12" /></svg>
+                {{ t('downloadPdf') }}
+              </button>
             </div>
             <div v-if="analysisText || analysisError" class="banner">
               <span v-if="analysisText">{{ analysisText }}</span>
@@ -605,6 +609,7 @@ const TRANSLATIONS = {
     rsdThisMonth: 'RSD ovog meseca',
     analyzing: 'Analiziram…',
     analyzeMonth: 'Analiziraj mesec',
+    downloadPdf: 'Preuzmi PDF izveštaj',
     close: 'Zatvori',
     recurringExpensesLabel: 'Mesečni troškovi koji se ponavljaju:',
     totalSavings: 'Ukupna ušteđevina:',
@@ -708,6 +713,7 @@ const TRANSLATIONS = {
     rsdThisMonth: 'RSD this month',
     analyzing: 'Analyzing…',
     analyzeMonth: 'Analyze month',
+    downloadPdf: 'Download PDF report',
     close: 'Close',
     recurringExpensesLabel: 'Recurring monthly expenses:',
     totalSavings: 'Total savings:',
@@ -1673,6 +1679,10 @@ async function analyzeMonth() {
   } finally {
     analyzing.value = false;
   }
+}
+
+function downloadMonthlyPdf() {
+  window.open(`/api/budget/report/pdf?period=${currentPeriod.value}`, '_blank');
 }
 
 function closeAnalysis() {
