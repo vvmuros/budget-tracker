@@ -582,7 +582,7 @@ const TRANSLATIONS = {
     yes: 'Da',
     no: 'Ne',
     title: 'Bilanso',
-    subtitle: 'primanja, troškovi i štednja, na jednom mestu',
+    subtitle: 'primanja, troškovi i štednja, na jednom mestu (test deploy)',
     loadingBook: 'Učitavanje…',
     yearAnalysisHeading: 'Analiza',
     loadingAnalysis: 'Učitavanje analize…',
