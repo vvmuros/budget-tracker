@@ -29,6 +29,11 @@ Route::middleware('guest')->group(function () {
     Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('password.update');
 });
 
+Route::get('/auth/google/redirect', [AuthController::class, 'redirectToGoogle'])
+    ->middleware('throttle:10,1')->name('auth.google.redirect');
+Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback'])
+    ->middleware('throttle:10,1')->name('auth.google.callback');
+
 Route::middleware('auth')->group(function () {
     Route::get('/email/verify', [AuthController::class, 'showVerifyNotice'])->name('verification.notice');
     Route::get('/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])

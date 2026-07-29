@@ -10,7 +10,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Laravel\Socialite\Facades\Socialite;
 
 class AuthController extends Controller
 {
@@ -69,6 +71,55 @@ class AuthController extends Controller
             ]);
         }
 
+        $request->session()->regenerate();
+
+        return redirect()->route('budget.index');
+    }
+
+    public function redirectToGoogle()
+    {
+        return Socialite::driver('google')->redirect();
+    }
+
+    /**
+     * Google already verifies the email address, so a Google sign-in both
+     * registers (if the email is new) and logs in, skipping our own
+     * password + email-verification flow entirely — including for accounts
+     * that already exist with a password, which just get linked by email.
+     */
+    public function handleGoogleCallback(Request $request)
+    {
+        $lang = $request->cookie('lang', 'sr');
+
+        try {
+            $googleUser = Socialite::driver('google')->user();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()->route('login')->withErrors(['email' => $lang === 'en'
+                ? 'Google sign-in failed. Please try again.'
+                : 'Prijava preko Google-a nije uspela. Pokušaj ponovo.']);
+        }
+
+        $user = User::where('google_id', $googleUser->getId())->first();
+
+        if (! $user) {
+            $user = User::where('email', $googleUser->getEmail())->first();
+
+            if ($user) {
+                $user->forceFill(['google_id' => $googleUser->getId()])->save();
+            } else {
+                $user = User::create([
+                    'name' => $googleUser->getName() ?: $googleUser->getNickname() ?: 'Bilanso',
+                    'email' => $googleUser->getEmail(),
+                    'google_id' => $googleUser->getId(),
+                    'password' => Hash::make(Str::random(40)),
+                ]);
+                $user->forceFill(['email_verified_at' => now()])->save();
+            }
+        }
+
+        Auth::login($user, true);
         $request->session()->regenerate();
 
         return redirect()->route('budget.index');
