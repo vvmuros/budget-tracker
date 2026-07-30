@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\ExchangeRateController;
+use App\Http\Controllers\ImportController;
 use App\Http\Controllers\PushController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SettingsController;
@@ -63,6 +64,9 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/api/exchange-rate/latest', [ExchangeRateController::class, 'latest'])->name('exchangeRate.latest');
     Route::get('/api/exchange-rate/history', [ExchangeRateController::class, 'history'])->name('exchangeRate.history');
+
+    Route::post('/api/import/preview', [ImportController::class, 'preview'])->middleware('throttle:10,1')->name('import.preview');
+    Route::post('/api/import/commit', [ImportController::class, 'commit'])->middleware('throttle:5,1')->name('import.commit');
 
     Route::get('/api/push/public-key', [PushController::class, 'publicKey'])->name('push.publicKey');
     Route::post('/api/push/subscribe', [PushController::class, 'subscribe'])->name('push.subscribe');

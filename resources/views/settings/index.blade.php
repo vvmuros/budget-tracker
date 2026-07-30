@@ -77,6 +77,10 @@ $lang = request()->cookie('lang', 'sr');
   .btn-danger:hover{ opacity:0.85; }
   .status{ font-size:12.5px; color:var(--pos); margin-top:10px; }
   .status.err{ color:var(--seal); }
+  select, input[type=file]{
+    font-family:'Inter',sans-serif; font-size:12.5px; color:var(--ink);
+    background:transparent; border:1px solid var(--border); border-radius:8px; padding:6px 8px;
+  }
   input[type=password]{
     font-family:'Inter',sans-serif; font-size:13px; padding:8px 10px; background:transparent;
     border:1px solid var(--border); color:var(--ink); border-radius:8px; flex:1; min-width:160px;
@@ -127,6 +131,59 @@ $lang = request()->cookie('lang', 'sr');
         <button type="button" class="btn-ghost" id="push-test" hidden>{{ $lang === 'en' ? 'Send test notification' : 'Pošalji probno obaveštenje' }}</button>
       </div>
       <div class="status" id="push-status"></div>
+    </div>
+
+    <div class="card">
+      <h2>{{ $lang === 'en' ? 'Import from CSV' : 'Uvoz iz CSV-a' }}</h2>
+      <p class="hint">
+        {{ $lang === 'en'
+          ? 'Export your data from another budgeting app or your bank as CSV, then map its columns here. Works with any CSV — you choose which column is which.'
+          : 'Izvezi podatke iz druge budžet aplikacije ili banke kao CSV, pa ovde mapiraj kolone. Radi sa bilo kojim CSV-om — ti biraš koja kolona je šta.' }}
+      </p>
+      <input type="file" id="import-file" accept=".csv,text/csv">
+
+      <div id="import-mapping" hidden style="margin-top:14px;">
+        <div class="row"><span class="hint" style="margin:0;">{{ $lang === 'en' ? 'Date column' : 'Kolona datuma' }}</span><select id="map-date"></select></div>
+        <div class="row"><span class="hint" style="margin:0;">{{ $lang === 'en' ? 'Name/description column' : 'Kolona naziva/opisa' }}</span><select id="map-name"></select></div>
+        <div class="row"><span class="hint" style="margin:0;">{{ $lang === 'en' ? 'Amount column' : 'Kolona iznosa' }}</span><select id="map-amount"></select></div>
+        <div class="row"><span class="hint" style="margin:0;">{{ $lang === 'en' ? 'Currency column (optional)' : 'Kolona valute (opciono)' }}</span><select id="map-currency"></select></div>
+        <div class="row"><span class="hint" style="margin:0;">{{ $lang === 'en' ? 'Category column (optional)' : 'Kolona kategorije (opciono)' }}</span><select id="map-category"></select></div>
+        <div class="row"><span class="hint" style="margin:0;">{{ $lang === 'en' ? 'Date format' : 'Format datuma' }}</span>
+          <select id="date-format">
+            <option value="Y-m-d">GGGG-MM-DD (2026-07-31)</option>
+            <option value="d/m/Y">DD/MM/GGGG (31/07/2026)</option>
+            <option value="m/d/Y">MM/DD/GGGG (07/31/2026)</option>
+            <option value="d.m.Y">DD.MM.GGGG (31.07.2026)</option>
+          </select>
+        </div>
+        <div class="row"><span class="hint" style="margin:0;">{{ $lang === 'en' ? 'Default currency' : 'Podrazumevana valuta' }}</span>
+          <select id="default-currency"><option>RSD</option><option>EUR</option><option>USD</option></select>
+        </div>
+        <div class="row"><span class="hint" style="margin:0;">{{ $lang === 'en' ? 'Income vs. expense' : 'Primanje ili trošak' }}</span>
+          <select id="kind-mode">
+            <option value="sign">{{ $lang === 'en' ? 'From amount sign (− expense, + income)' : 'Iz predznaka iznosa (− trošak, + primanje)' }}</option>
+            <option value="fixed">{{ $lang === 'en' ? 'Everything is the same' : 'Sve je isto' }}</option>
+          </select>
+        </div>
+        <div class="row" id="fixed-kind-row" hidden>
+          <span class="hint" style="margin:0;">{{ $lang === 'en' ? 'Import everything as' : 'Uvezi sve kao' }}</span>
+          <select id="default-kind">
+            <option value="expense">{{ $lang === 'en' ? 'Expenses' : 'Troškove' }}</option>
+            <option value="income">{{ $lang === 'en' ? 'Income' : 'Primanja' }}</option>
+          </select>
+        </div>
+        <label class="row" style="cursor:pointer;">
+          <span class="hint" style="margin:0;">{{ $lang === 'en' ? 'First row is a header' : 'Prvi red je zaglavlje' }}</span>
+          <input type="checkbox" id="has-header" checked>
+        </label>
+
+        <div id="import-preview-wrap" style="margin-top:12px; overflow-x:auto;"></div>
+
+        <div class="row" style="margin-top:14px;">
+          <button type="button" class="btn" id="import-commit-btn">{{ $lang === 'en' ? 'Import' : 'Uvezi' }}</button>
+        </div>
+      </div>
+      <div class="status" id="import-status"></div>
     </div>
 
     <div class="card danger">
@@ -273,6 +330,153 @@ $lang = request()->cookie('lang', 'sr');
           });
         });
       }
+    })();
+
+    (function(){
+      var t = {
+        selectColumn: {{ Illuminate\Support\Js::from($lang === 'en' ? '— none —' : '— nema —') }},
+        readError: {{ Illuminate\Support\Js::from($lang === 'en' ? "Couldn't read that file. Is it a valid CSV?" : 'Nisam mogao da pročitam fajl. Da li je validan CSV?') }},
+        importing: {{ Illuminate\Support\Js::from($lang === 'en' ? 'Importing…' : 'Uvozim…') }},
+        importError: {{ Illuminate\Support\Js::from($lang === 'en' ? 'Import failed. Check your column choices and try again.' : 'Uvoz nije uspeo. Proveri izbor kolona i probaj ponovo.') }},
+      };
+
+      function resultText(imported, skipped, months) {
+        var monthList = months.length ? months.join(', ') : '—';
+        return {{ Illuminate\Support\Js::from($lang === 'en' ? 'Imported' : 'Uvezeno') }} + ' ' + imported
+          + ' (' + {{ Illuminate\Support\Js::from($lang === 'en' ? 'skipped' : 'preskočeno') }} + ' ' + skipped + ') · '
+          + {{ Illuminate\Support\Js::from($lang === 'en' ? 'months' : 'meseci') }} + ': ' + monthList;
+      }
+
+      var csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+      var fileInput = document.getElementById('import-file');
+      var mappingBox = document.getElementById('import-mapping');
+      var importStatus = document.getElementById('import-status');
+      var previewWrap = document.getElementById('import-preview-wrap');
+      var commitBtn = document.getElementById('import-commit-btn');
+      var kindModeSelect = document.getElementById('kind-mode');
+      var fixedKindRow = document.getElementById('fixed-kind-row');
+
+      var columnSelects = {
+        date: document.getElementById('map-date'),
+        name: document.getElementById('map-name'),
+        amount: document.getElementById('map-amount'),
+        currency: document.getElementById('map-currency'),
+        category: document.getElementById('map-category'),
+      };
+
+      kindModeSelect.addEventListener('change', function(){
+        fixedKindRow.hidden = kindModeSelect.value !== 'fixed';
+      });
+
+      function setImportStatus(text, isError){
+        importStatus.textContent = text || '';
+        importStatus.classList.toggle('err', !!isError);
+      }
+
+      fileInput.addEventListener('change', function(){
+        var file = fileInput.files[0];
+        if (!file) return;
+
+        setImportStatus('', false);
+        mappingBox.hidden = true;
+
+        var body = new FormData();
+        body.append('file', file);
+
+        fetch('/api/import/preview', {
+          method: 'POST',
+          headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+          body: body,
+        }).then(function(res){
+          if (!res.ok) throw new Error('preview failed');
+          return res.json();
+        }).then(function(data){
+          Object.keys(columnSelects).forEach(function(key){
+            var select = columnSelects[key];
+            select.innerHTML = '';
+            if (key === 'currency' || key === 'category') {
+              var noneOpt = document.createElement('option');
+              noneOpt.value = '';
+              noneOpt.textContent = t.selectColumn;
+              select.appendChild(noneOpt);
+            }
+            data.headers.forEach(function(header, i){
+              var opt = document.createElement('option');
+              opt.value = i;
+              opt.textContent = header || ('#' + (i + 1));
+              select.appendChild(opt);
+            });
+          });
+
+          var table = document.createElement('table');
+          table.style.width = '100%';
+          table.style.fontSize = '11.5px';
+          table.style.borderCollapse = 'collapse';
+          var thead = document.createElement('tr');
+          data.headers.forEach(function(h){
+            var th = document.createElement('th');
+            th.textContent = h;
+            th.style.textAlign = 'left';
+            th.style.padding = '4px 6px';
+            th.style.borderBottom = '1px solid var(--border)';
+            thead.appendChild(th);
+          });
+          table.appendChild(thead);
+          data.sample_rows.forEach(function(row){
+            var tr = document.createElement('tr');
+            row.forEach(function(cell){
+              var td = document.createElement('td');
+              td.textContent = cell;
+              td.style.padding = '4px 6px';
+              td.style.borderBottom = '1px solid var(--border)';
+              tr.appendChild(td);
+            });
+            table.appendChild(tr);
+          });
+          previewWrap.innerHTML = '';
+          previewWrap.appendChild(table);
+
+          mappingBox.hidden = false;
+        }).catch(function(){
+          setImportStatus(t.readError, true);
+        });
+      });
+
+      commitBtn.addEventListener('click', function(){
+        var file = fileInput.files[0];
+        if (!file) return;
+
+        commitBtn.disabled = true;
+        setImportStatus(t.importing, false);
+
+        var body = new FormData();
+        body.append('file', file);
+        body.append('has_header', document.getElementById('has-header').checked ? '1' : '0');
+        body.append('date_column', columnSelects.date.value);
+        body.append('name_column', columnSelects.name.value);
+        body.append('amount_column', columnSelects.amount.value);
+        if (columnSelects.currency.value !== '') body.append('currency_column', columnSelects.currency.value);
+        if (columnSelects.category.value !== '') body.append('category_column', columnSelects.category.value);
+        body.append('date_format', document.getElementById('date-format').value);
+        body.append('default_currency', document.getElementById('default-currency').value);
+        body.append('kind_mode', kindModeSelect.value);
+        if (kindModeSelect.value === 'fixed') body.append('default_kind', document.getElementById('default-kind').value);
+
+        fetch('/api/import/commit', {
+          method: 'POST',
+          headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+          body: body,
+        }).then(function(res){
+          if (!res.ok) throw new Error('import failed');
+          return res.json();
+        }).then(function(data){
+          setImportStatus(resultText(data.imported, data.skipped, data.months || []), false);
+        }).catch(function(){
+          setImportStatus(t.importError, true);
+        }).finally(function(){
+          commitBtn.disabled = false;
+        });
+      });
     })();
 
     if ('serviceWorker' in navigator) {

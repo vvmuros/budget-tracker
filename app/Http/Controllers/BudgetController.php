@@ -333,17 +333,20 @@ class BudgetController extends Controller
                 'currency' => ['type' => 'STRING', 'enum' => ['RSD', 'EUR', 'USD']],
                 'freq' => ['type' => 'INTEGER'],
                 'category' => ['type' => 'STRING', 'enum' => $categories],
+                'period' => ['type' => 'STRING'],
             ],
-            'required' => ['action', 'name', 'amount', 'currency', 'freq', 'category'],
+            'required' => ['action', 'name', 'amount', 'currency', 'freq', 'category', 'period'],
         ];
 
         $message = $data['message'];
         $categoryList = implode(', ', $categories);
         $lang = $request->cookie('lang', 'sr');
+        $currentPeriod = now()->format('Y-m');
 
         if ($lang === 'en') {
             $prompt = <<<PROMPT
             The user wrote a message about their finances: "{$message}"
+            Today's actual month is {$currentPeriod} (format YYYY-MM).
 
             Determine whether the user wants to:
             - add an expense (add_expense)
@@ -365,6 +368,12 @@ class BudgetController extends Controller
             Don't assume something is monthly just because frequency wasn't stated.
             Savings items don't need freq.
 
+            Also determine which month this entry belongs to (period, format
+            YYYY-MM). If the message references a different month than today's
+            ({$currentPeriod}) — e.g. "last month", "back in June", "in May" —
+            resolve it to the actual YYYY-MM relative to today's month and return
+            that. If no month is mentioned, return today's month ({$currentPeriod}).
+
             If add_expense or add_saving, pick the best matching category
             (category) from this list based on the item name: {$categoryList}. If
             none clearly match, use "Ostalo". For add_income or unclear, set
@@ -373,6 +382,7 @@ class BudgetController extends Controller
         } else {
             $prompt = <<<PROMPT
             Korisnik je napisao poruku o svojim finansijama na srpskom: "{$message}"
+            Stvarni trenutni mesec je {$currentPeriod} (format GGGG-MM).
 
             Prepoznaj da li korisnik želi da:
             - doda trošak (add_expense)
@@ -393,6 +403,12 @@ class BudgetController extends Controller
             mesečno samo zato što učestalost nije eksplicitno navedena. Za štednju freq
             nije potreban.
 
+            Takođe odredi kom mesecu ova stavka pripada (period, format GGGG-MM).
+            Ako poruka pominje drugi mesec u odnosu na danas ({$currentPeriod}) —
+            npr. "prošlog meseca", "u junu", "nazad za maj" — izračunaj tačan
+            GGGG-MM u odnosu na trenutni mesec i vrati taj period. Ako nijedan
+            mesec nije pomenut, vrati trenutni mesec ({$currentPeriod}).
+
             Ako je add_expense ili add_saving, izaberi najprikladniju kategoriju (category)
             iz ove liste na osnovu naziva stavke: {$categoryList}. Ako nijedna jasno ne
             odgovara, koristi "Ostalo". Za add_income ili unclear, postavi category na
@@ -409,6 +425,10 @@ class BudgetController extends Controller
 
         if (! $parsed || ! isset($parsed['action'])) {
             return response()->json(['action' => 'unclear']);
+        }
+
+        if (! isset($parsed['period']) || ! preg_match('/^\d{4}-\d{2}$/', $parsed['period'])) {
+            $parsed['period'] = $currentPeriod;
         }
 
         return response()->json($parsed);
@@ -441,9 +461,12 @@ class BudgetController extends Controller
                 'currency' => ['type' => 'STRING', 'enum' => ['RSD', 'EUR', 'USD']],
                 'freq' => ['type' => 'INTEGER'],
                 'category' => ['type' => 'STRING', 'enum' => $categories],
+                'period' => ['type' => 'STRING'],
             ],
-            'required' => ['action', 'name', 'amount', 'currency', 'freq', 'category'],
+            'required' => ['action', 'name', 'amount', 'currency', 'freq', 'category', 'period'],
         ];
+
+        $currentPeriod = now()->format('Y-m');
 
         if ($lang === 'en') {
             $prompt = <<<PROMPT
@@ -454,6 +477,8 @@ class BudgetController extends Controller
             - add income (add_income)
             - add a savings/asset item (add_saving)
             - or the recording is unclear/unrelated (unclear)
+
+            Today's actual month is {$currentPeriod} (format YYYY-MM).
 
             If clear, extract the item name (name), amount (amount, number only),
             currency (currency: RSD/EUR/USD, default RSD if not stated), and for
@@ -467,6 +492,12 @@ class BudgetController extends Controller
             "membership", "installment", "rent") or clearly describe a recurring
             obligation. Don't assume something is monthly just because frequency
             wasn't stated. Savings items don't need freq.
+
+            Also determine which month this entry belongs to (period, format
+            YYYY-MM). If they mention a different month than today's
+            ({$currentPeriod}) — e.g. "last month", "back in June" — resolve it
+            to the actual YYYY-MM relative to today's month and return that. If
+            no month is mentioned, return today's month ({$currentPeriod}).
 
             If add_expense or add_saving, pick the best matching category
             (category) from this list based on the item name: {$categoryList}. If
@@ -482,6 +513,8 @@ class BudgetController extends Controller
             - doda stavku štednje/imovine (add_saving)
             - ili snimak nije jasan/nije o finansijama (unclear)
 
+            Stvarni trenutni mesec je {$currentPeriod} (format GGGG-MM).
+
             Ako je jasno, izvuci naziv stavke (name), iznos (amount, samo broj), valutu
             (currency: RSD/EUR/USD, podrazumevano RSD ako nije rečeno), i za trošak/primanje
             učestalost (freq: 1=mesečno, 2=na 2 meseca, 3=na 3 meseca, 0=jednokratno).
@@ -493,6 +526,12 @@ class BudgetController extends Controller
             "rata", "kirija", "stanarina") ili opisuje očigledno ponavljajuću obavezu. Ne
             pretpostavljaj automatski da je nešto mesečno samo zato što učestalost nije
             eksplicitno navedena. Za štednju freq nije potreban.
+
+            Takođe odredi kom mesecu ova stavka pripada (period, format GGGG-MM).
+            Ako korisnik pominje drugi mesec u odnosu na danas ({$currentPeriod}) —
+            npr. "prošlog meseca", "u junu", "nazad za maj" — izračunaj tačan
+            GGGG-MM u odnosu na trenutni mesec i vrati taj period. Ako nijedan
+            mesec nije pomenut, vrati trenutni mesec ({$currentPeriod}).
 
             Ako je add_expense ili add_saving, izaberi najprikladniju kategoriju (category)
             iz ove liste na osnovu naziva stavke: {$categoryList}. Ako nijedna jasno ne
@@ -512,6 +551,10 @@ class BudgetController extends Controller
 
         if (! $parsed || ! isset($parsed['action'])) {
             return response()->json(['action' => 'unclear']);
+        }
+
+        if (! isset($parsed['period']) || ! preg_match('/^\d{4}-\d{2}$/', $parsed['period'])) {
+            $parsed['period'] = $currentPeriod;
         }
 
         return response()->json($parsed);

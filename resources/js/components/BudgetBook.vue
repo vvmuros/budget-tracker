@@ -1553,10 +1553,12 @@ async function sendVoiceMessage(blob) {
       const category = data.category || 'Ostalo';
       const freqText = data.action === 'add_saving' ? '' : `, ${freqLabel(freq)}`;
       const catText = data.action === 'add_income' ? '' : `, ${t('categoryWord')} ${categoryLabel(category)}`;
+      const targetPeriod = data.period && data.period !== currentPeriod.value ? data.period : null;
+      const periodText = targetPeriod ? ` (${periodLabel(targetPeriod)})` : '';
       chatLog.push({
         role: 'assistant',
-        text: `${t('confirmAddPrefix')} ${CHAT_ACTION_LABELS.value[data.action]} "${data.name}": ${data.amount} ${currency}${freqText}${catText}?`,
-        confirm: { action: data.action, name: data.name, amount: data.amount, currency, freq, category },
+        text: `${t('confirmAddPrefix')} ${CHAT_ACTION_LABELS.value[data.action]} "${data.name}": ${data.amount} ${currency}${freqText}${catText}${periodText}?`,
+        confirm: { action: data.action, name: data.name, amount: data.amount, currency, freq, category, period: data.period },
       });
     } else {
       chatLog.push({ role: 'assistant', text: t('voiceUnclear') });
@@ -1595,10 +1597,12 @@ async function sendChatMessage() {
       const category = data.category || 'Ostalo';
       const freqText = data.action === 'add_saving' ? '' : `, ${freqLabel(freq)}`;
       const catText = data.action === 'add_income' ? '' : `, ${t('categoryWord')} ${categoryLabel(category)}`;
+      const targetPeriod = data.period && data.period !== currentPeriod.value ? data.period : null;
+      const periodText = targetPeriod ? ` (${periodLabel(targetPeriod)})` : '';
       chatLog.push({
         role: 'assistant',
-        text: `${t('confirmAddPrefix')} ${CHAT_ACTION_LABELS.value[data.action]} "${data.name}": ${data.amount} ${currency}${freqText}${catText}?`,
-        confirm: { action: data.action, name: data.name, amount: data.amount, currency, freq, category },
+        text: `${t('confirmAddPrefix')} ${CHAT_ACTION_LABELS.value[data.action]} "${data.name}": ${data.amount} ${currency}${freqText}${catText}${periodText}?`,
+        confirm: { action: data.action, name: data.name, amount: data.amount, currency, freq, category, period: data.period },
       });
     } else {
       chatLog.push({ role: 'assistant', text: t('unclear') });
@@ -1612,20 +1616,49 @@ async function sendChatMessage() {
   }
 }
 
-function applyChatAction(msg) {
-  const { action, name, amount, currency, freq, category } = msg.confirm;
+// Chat/voice entries normally land in the month currently being viewed, but
+// the user can name a different one ("last month", "back in June") — this
+// fetches that other month's already-saved items (carry-forward and all,
+// same as the book view would show), appends the new one, and saves it back
+// through the same store endpoint, without touching the in-memory arrays
+// that represent only the currently-viewed month.
+async function addItemToOtherPeriod(period, key, item) {
+  try {
+    const { data } = await axios.get('/api/budget', { params: { period } });
+    const existing = data.data?.[key] ? JSON.parse(data.data[key]) : [];
+    existing.push(item);
+    await axios.post('/api/budget', { key, value: JSON.stringify(existing), period });
+  } catch (e) {
+    // best effort — nothing else to meaningfully do if this fails
+  }
+}
+
+async function applyChatAction(msg) {
+  const { action, name, amount, currency, freq, category, period } = msg.confirm;
+  const targetPeriod = period && period !== currentPeriod.value ? period : null;
+
   if (action === 'add_expense') {
-    expenses.push({ id: generateId(), name, amount, currency, freq, active: true, endPeriod: null, category: category || 'Ostalo', createdAt: Date.now() });
-    saveExpenses();
+    const item = { id: generateId(), name, amount, currency, freq, active: true, endPeriod: null, category: category || 'Ostalo', createdAt: Date.now() };
+    if (targetPeriod) {
+      await addItemToOtherPeriod(targetPeriod, 'expense-items', item);
+    } else {
+      expenses.push(item);
+      saveExpenses();
+    }
   } else if (action === 'add_income') {
-    income.push({ id: generateId(), name, amount, currency, freq, active: true, createdAt: Date.now() });
-    saveIncome();
+    const item = { id: generateId(), name, amount, currency, freq, active: true, createdAt: Date.now() };
+    if (targetPeriod) {
+      await addItemToOtherPeriod(targetPeriod, 'income-items', item);
+    } else {
+      income.push(item);
+      saveIncome();
+    }
   } else if (action === 'add_saving') {
     savings.push({ id: generateId(), name, amount, currency, category: category || 'Ostalo', createdAt: Date.now() });
     saveSavings();
   }
   msg.confirm = null;
-  chatLog.push({ role: 'assistant', text: t('added') });
+  chatLog.push({ role: 'assistant', text: targetPeriod ? `${t('added')} (${periodLabel(targetPeriod)})` : t('added') });
   scrollChatToBottom();
 }
 
