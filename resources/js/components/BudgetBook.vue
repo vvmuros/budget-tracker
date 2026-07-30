@@ -665,6 +665,7 @@ const TRANSLATIONS = {
     chatError: 'Nešto nije u redu, probaj ponovo.',
     added: '✓ Dodato.',
     rejected: 'U redu, ništa nisam dodao.',
+    duplicateConfirm: 'Ovo izgleda kao duplikat — "{name}" ({amount} {currency}) je već dodato danas. Dodati ponovo?',
     receiptSent: '📷 Poslata slika računa',
     readingReceipt: 'Čitam račun…',
     receiptUnclear: 'Nisam uspeo da pročitam račun sa slike — probaj jasniju fotografiju ili ukucaj ručno.',
@@ -776,6 +777,7 @@ const TRANSLATIONS = {
     chatError: 'Something went wrong, try again.',
     added: '✓ Added.',
     rejected: "OK, I didn't add anything.",
+    duplicateConfirm: 'This looks like a duplicate — "{name}" ({amount} {currency}) was already added today. Add it again?',
     receiptSent: '📷 Receipt photo sent',
     readingReceipt: 'Reading the receipt…',
     receiptUnclear: "Couldn't read the receipt from the photo — try a clearer picture or type it manually.",
@@ -1125,6 +1127,31 @@ function startQuickAdd(kind) {
 function cancelQuickAdd() {
   quickAdd.value = null;
 }
+// Same name + same amount + same currency, added earlier the same day —
+// almost always an accidental double-entry (fat-fingered "add" twice, or
+// re-typed something already logged), but a person really can buy two
+// coffees in a day, so this warns instead of silently blocking.
+function isToday(timestamp) {
+  if (!timestamp) return false;
+  const d = new Date(timestamp);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+}
+
+function findDuplicateToday(list, name, amount, currency) {
+  const normalizedName = name.trim().toLowerCase();
+  return list.some((i) => (
+    (i.name || '').trim().toLowerCase() === normalizedName
+    && Number(i.amount) === Number(amount)
+    && i.currency === currency
+    && isToday(i.createdAt)
+  ));
+}
+
+function duplicateConfirmMessage(name, amount, currency) {
+  return t('duplicateConfirm').replace('{name}', name).replace('{amount}', amount).replace('{currency}', currency);
+}
+
 function confirmQuickAdd() {
   const qa = quickAdd.value;
   if (!qa) return;
@@ -1132,7 +1159,13 @@ function confirmQuickAdd() {
   quickAdd.value = null;
   if (!name) return;
 
-  const base = { id: generateId(), name, amount: qa.amount || 0, currency: qa.currency, createdAt: Date.now() };
+  const amount = qa.amount || 0;
+  const targetList = qa.kind === 'expense' ? expenses : qa.kind === 'income' ? income : savings;
+  if (findDuplicateToday(targetList, name, amount, qa.currency)) {
+    if (!window.confirm(duplicateConfirmMessage(name, amount, qa.currency))) return;
+  }
+
+  const base = { id: generateId(), name, amount, currency: qa.currency, createdAt: Date.now() };
 
   if (qa.kind === 'expense') {
     const item = { ...base, freq: 1, active: true, endPeriod: null, category: 'Ostalo' };
@@ -1636,6 +1669,21 @@ async function addItemToOtherPeriod(period, key, item) {
 async function applyChatAction(msg) {
   const { action, name, amount, currency, freq, category, period } = msg.confirm;
   const targetPeriod = period && period !== currentPeriod.value ? period : null;
+
+  // Only checked when landing in the currently-viewed month — an item added
+  // to a different (past/future) period isn't loaded into these in-memory
+  // arrays, so there's nothing local to compare it against.
+  if (!targetPeriod) {
+    const targetList = action === 'add_expense' ? expenses : action === 'add_income' ? income : action === 'add_saving' ? savings : null;
+    if (targetList && findDuplicateToday(targetList, name, amount, currency)) {
+      if (!window.confirm(duplicateConfirmMessage(name, amount, currency))) {
+        msg.confirm = null;
+        chatLog.push({ role: 'assistant', text: t('rejected') });
+        scrollChatToBottom();
+        return;
+      }
+    }
+  }
 
   if (action === 'add_expense') {
     const item = { id: generateId(), name, amount, currency, freq, active: true, endPeriod: null, category: category || 'Ostalo', createdAt: Date.now() };
