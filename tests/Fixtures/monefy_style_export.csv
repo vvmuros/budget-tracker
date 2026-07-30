@@ -1,0 +1,6 @@
+date,account,category,amount,currency,converted amount,converted currency,description
+31/07/2026,Cash,Food,-1200,RSD,-1200,RSD,Namirnice
+30/07/2026,Cash,Transport,-2000,RSD,-2000,RSD,Benzin
+28/07/2026,Card,Salary,130000,RSD,130000,RSD,Plata
+15/07/2026,Card,Entertainment,-1500,RSD,-1500,RSD,Bioskop
+28/06/2026,Card,Bills,-3200,RSD,-3200,RSD,Teretana

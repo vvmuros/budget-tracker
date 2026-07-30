@@ -340,11 +340,37 @@ $lang = request()->cookie('lang', 'sr');
         importError: {{ Illuminate\Support\Js::from($lang === 'en' ? 'Import failed. Check your column choices and try again.' : 'Uvoz nije uspeo. Proveri izbor kolona i probaj ponovo.') }},
       };
 
-      function resultText(imported, skipped, months) {
+      var skipReasonLabels = {
+        invalid_date: {{ Illuminate\Support\Js::from($lang === 'en' ? "date didn't match the chosen format" : 'datum se ne poklapa sa izabranim formatom') }},
+        invalid_amount: {{ Illuminate\Support\Js::from($lang === 'en' ? 'amount was empty or zero' : 'iznos je prazan ili nula') }},
+        empty_name: {{ Illuminate\Support\Js::from($lang === 'en' ? 'name/description was empty' : 'naziv/opis je prazan') }},
+        duplicate: {{ Illuminate\Support\Js::from($lang === 'en' ? 'looked like a duplicate already in that month' : 'delovalo je kao duplikat koji vec postoji u tom mesecu') }},
+      };
+
+      var importAnywayLabel = {{ Illuminate\Support\Js::from($lang === 'en' ? 'Import them anyway' : 'Uvezi ih ipak') }};
+
+      function resultText(imported, skipped, months, skipReasons) {
         var monthList = months.length ? months.join(', ') : '—';
-        return {{ Illuminate\Support\Js::from($lang === 'en' ? 'Imported' : 'Uvezeno') }} + ' ' + imported
+        var text = {{ Illuminate\Support\Js::from($lang === 'en' ? 'Imported' : 'Uvezeno') }} + ' ' + imported
           + ' (' + {{ Illuminate\Support\Js::from($lang === 'en' ? 'skipped' : 'preskočeno') }} + ' ' + skipped + ') · '
           + {{ Illuminate\Support\Js::from($lang === 'en' ? 'months' : 'meseci') }} + ': ' + monthList;
+
+        if (skipped > 0 && skipReasons) {
+          var reasonParts = Object.keys(skipReasons)
+            .filter(function(key){ return skipReasons[key] > 0; })
+            .map(function(key){ return skipReasons[key] + ' — ' + skipReasonLabels[key]; });
+          if (reasonParts.length) {
+            text += '. ' + reasonParts.join(', ');
+          }
+        }
+
+        return text;
+      }
+
+      function duplicateListText(duplicates) {
+        return duplicates.map(function(d){
+          return '· ' + d.name + ' — ' + d.amount + ' ' + d.currency + ' (' + d.date + ')';
+        }).join('\n');
       }
 
       var csrfToken = document.querySelector('meta[name="csrf-token"]').content;
@@ -436,19 +462,20 @@ $lang = request()->cookie('lang', 'sr');
           previewWrap.innerHTML = '';
           previewWrap.appendChild(table);
 
+          if (data.detected_date_column !== null && data.detected_date_column !== undefined) {
+            columnSelects.date.value = data.detected_date_column;
+          }
+          if (data.detected_date_format) {
+            document.getElementById('date-format').value = data.detected_date_format;
+          }
+
           mappingBox.hidden = false;
         }).catch(function(){
           setImportStatus(t.readError, true);
         });
       });
 
-      commitBtn.addEventListener('click', function(){
-        var file = fileInput.files[0];
-        if (!file) return;
-
-        commitBtn.disabled = true;
-        setImportStatus(t.importing, false);
-
+      function buildCommitBody(file, includeDuplicates){
         var body = new FormData();
         body.append('file', file);
         body.append('has_header', document.getElementById('has-header').checked ? '1' : '0');
@@ -461,21 +488,55 @@ $lang = request()->cookie('lang', 'sr');
         body.append('default_currency', document.getElementById('default-currency').value);
         body.append('kind_mode', kindModeSelect.value);
         if (kindModeSelect.value === 'fixed') body.append('default_kind', document.getElementById('default-kind').value);
+        if (includeDuplicates) body.append('include_duplicates', '1');
+        return body;
+      }
 
-        fetch('/api/import/commit', {
+      function runCommit(file, includeDuplicates){
+        commitBtn.disabled = true;
+        setImportStatus(t.importing, false);
+
+        return fetch('/api/import/commit', {
           method: 'POST',
           headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
-          body: body,
+          body: buildCommitBody(file, includeDuplicates),
         }).then(function(res){
           if (!res.ok) throw new Error('import failed');
           return res.json();
         }).then(function(data){
-          setImportStatus(resultText(data.imported, data.skipped, data.months || []), false);
+          var text = resultText(data.imported, data.skipped, data.months || [], data.skip_reasons);
+          importStatus.textContent = '';
+          importStatus.classList.remove('err');
+          importStatus.appendChild(document.createTextNode(text));
+
+          if (data.duplicates && data.duplicates.length) {
+            var details = document.createElement('pre');
+            details.style.whiteSpace = 'pre-wrap';
+            details.style.margin = '8px 0';
+            details.textContent = duplicateListText(data.duplicates);
+            importStatus.appendChild(details);
+
+            var anywayBtn = document.createElement('button');
+            anywayBtn.type = 'button';
+            anywayBtn.className = 'btn';
+            anywayBtn.textContent = importAnywayLabel;
+            anywayBtn.addEventListener('click', function(){
+              runCommit(file, true);
+            });
+            importStatus.appendChild(anywayBtn);
+          }
         }).catch(function(){
           setImportStatus(t.importError, true);
         }).finally(function(){
           commitBtn.disabled = false;
         });
+      }
+
+      commitBtn.addEventListener('click', function(){
+        var file = fileInput.files[0];
+        if (!file) return;
+
+        runCommit(file, false);
       });
     })();
 
