@@ -349,6 +349,15 @@ $lang = request()->cookie('lang', 'sr');
 
       var importAnywayLabel = {{ Illuminate\Support\Js::from($lang === 'en' ? 'Import them anyway' : 'Uvezi ih ipak') }};
 
+      var dateFormatLabels = {
+        'Y-m-d': 'GGGG-MM-DD', 'd/m/Y': 'DD/MM/GGGG', 'm/d/Y': 'MM/DD/GGGG', 'd.m.Y': 'DD.MM.GGGG',
+      };
+      function dateFormatAdjustedText(usedFormat) {
+        return ({{ Illuminate\Support\Js::from($lang === 'en' ? 'Note: the selected date format did not match the file, so' : 'Napomena: izabrani format datuma se nije poklapao sa fajlom, pa je') }})
+          + ' ' + (dateFormatLabels[usedFormat] || usedFormat) + ' '
+          + ({{ Illuminate\Support\Js::from($lang === 'en' ? 'was used automatically instead.' : 'automatski korišćen umesto njega.') }});
+      }
+
       function resultText(imported, skipped, months, skipReasons) {
         var monthList = months.length ? months.join(', ') : '—';
         var text = {{ Illuminate\Support\Js::from($lang === 'en' ? 'Imported' : 'Uvezeno') }} + ' ' + imported
@@ -508,6 +517,13 @@ $lang = request()->cookie('lang', 'sr');
           importStatus.textContent = '';
           importStatus.classList.remove('err');
           importStatus.appendChild(document.createTextNode(text));
+
+          if (data.date_format_adjusted) {
+            var note = document.createElement('div');
+            note.style.marginTop = '6px';
+            note.textContent = dateFormatAdjustedText(data.used_date_format);
+            importStatus.appendChild(note);
+          }
 
           if (data.duplicates && data.duplicates.length) {
             var details = document.createElement('pre');

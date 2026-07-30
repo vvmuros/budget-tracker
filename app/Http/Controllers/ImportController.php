@@ -104,6 +104,9 @@ class ImportController extends Controller
         }
         $rows = array_slice($rows, 0, self::MAX_ROWS);
 
+        $dateFormat = $this->resolveDateFormat($rows, $data['date_column'], $data['date_format']);
+        $dateFormatAdjusted = $dateFormat !== $data['date_format'];
+
         $user = $request->user();
         $candidates = [];
         $newCategories = [];
@@ -115,7 +118,7 @@ class ImportController extends Controller
             $name = trim($row[$data['name_column']] ?? '');
             $amountRaw = trim($row[$data['amount_column']] ?? '');
 
-            $date = \DateTime::createFromFormat('!'.$data['date_format'], $dateRaw);
+            $date = \DateTime::createFromFormat('!'.$dateFormat, $dateRaw);
             $cleanedAmount = preg_replace('/[^0-9.\-]/', '', str_replace(',', '', $amountRaw));
             $amount = is_numeric($cleanedAmount) ? (float) $cleanedAmount : 0.0;
 
@@ -235,7 +238,49 @@ class ImportController extends Controller
             'skip_reasons' => $skipReasons,
             'duplicates' => $duplicates,
             'months' => array_values(array_keys($months)),
+            'used_date_format' => $dateFormat,
+            'date_format_adjusted' => $dateFormatAdjusted,
         ]);
+    }
+
+    /**
+     * The dropdown value is just a starting guess (and easy to leave stale
+     * across separate uploads, which is exactly what caused a real duplicate
+     * mix-up during testing) — if it fails to parse the actual data in the
+     * chosen column but a different supported format parses every row
+     * cleanly, that one wins instead. Only relevant when the whole column
+     * unambiguously fits one format; otherwise the requested one is kept.
+     */
+    private function resolveDateFormat(array $rows, int $dateColumn, string $requestedFormat): string
+    {
+        if ($this->allRowsParseWithFormat($rows, $dateColumn, $requestedFormat)) {
+            return $requestedFormat;
+        }
+
+        foreach (['Y-m-d', 'd/m/Y', 'm/d/Y', 'd.m.Y'] as $format) {
+            if ($format !== $requestedFormat && $this->allRowsParseWithFormat($rows, $dateColumn, $format)) {
+                return $format;
+            }
+        }
+
+        return $requestedFormat;
+    }
+
+    private function allRowsParseWithFormat(array $rows, int $dateColumn, string $format): bool
+    {
+        $sawAny = false;
+        foreach ($rows as $row) {
+            $value = trim($row[$dateColumn] ?? '');
+            if ($value === '') {
+                continue;
+            }
+            $sawAny = true;
+            if (! \DateTime::createFromFormat('!'.$format, $value)) {
+                return false;
+            }
+        }
+
+        return $sawAny;
     }
 
     /**

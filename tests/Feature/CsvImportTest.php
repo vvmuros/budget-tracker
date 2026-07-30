@@ -41,10 +41,14 @@ class CsvImportTest extends TestCase
         $this->assertCount(5, $response->json('sample_rows'));
     }
 
-    public function test_commit_reports_why_rows_were_skipped_when_the_date_format_is_wrong(): void
+    public function test_commit_self_heals_when_the_selected_date_format_does_not_match_the_data(): void
     {
         $user = User::factory()->create();
 
+        // date_format is left on Y-m-d (e.g. stale from a previous upload's
+        // dropdown), but every value in the date column is actually d/m/Y —
+        // the whole point of auto-resolving is that this must not silently
+        // skip every row like it used to.
         $response = $this->actingAs($user)->postJson('/api/import/commit', [
             'file' => $this->fixture('monefy_style_export.csv'),
             'has_header' => true,
@@ -59,10 +63,32 @@ class CsvImportTest extends TestCase
 
         $response->assertOk();
         $response->assertJson([
-            'imported' => 0,
-            'skipped' => 5,
-            'skip_reasons' => ['invalid_date' => 5, 'invalid_amount' => 0, 'empty_name' => 0],
+            'imported' => 5,
+            'skipped' => 0,
+            'used_date_format' => 'd/m/Y',
+            'date_format_adjusted' => true,
         ]);
+    }
+
+    public function test_commit_keeps_the_requested_date_format_when_it_matches_the_data(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->postJson('/api/import/commit', [
+            'file' => $this->fixture('generic_bank_export.csv'),
+            'has_header' => true,
+            'date_column' => 0,
+            'name_column' => 1,
+            'amount_column' => 2,
+            'category_column' => 3,
+            'date_format' => 'Y-m-d',
+            'default_currency' => 'RSD',
+            'kind_mode' => 'fixed',
+            'default_kind' => 'expense',
+        ]);
+
+        $response->assertOk();
+        $response->assertJson(['used_date_format' => 'Y-m-d', 'date_format_adjusted' => false]);
     }
 
     public function test_commit_splits_by_sign_into_expense_and_income_across_months(): void
