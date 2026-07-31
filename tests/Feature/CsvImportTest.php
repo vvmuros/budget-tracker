@@ -262,6 +262,45 @@ class CsvImportTest extends TestCase
         $response->assertJson(['imported' => 2, 'skipped' => 2, 'skip_reasons' => ['duplicate' => 2]]);
     }
 
+    public function test_preview_and_commit_work_with_an_xlsx_file_the_same_as_csv(): void
+    {
+        $user = User::factory()->create();
+
+        $preview = $this->actingAs($user)->postJson('/api/import/preview', [
+            'file' => $this->fixture('generic_bank_export.xlsx'),
+        ]);
+        $preview->assertOk();
+        $preview->assertJson([
+            'headers' => ['Date', 'Description', 'Amount', 'Category'],
+            'total_rows' => 4,
+            'detected_date_column' => 0,
+            'detected_date_format' => 'Y-m-d',
+        ]);
+
+        $response = $this->actingAs($user)->postJson('/api/import/commit', [
+            'file' => $this->fixture('generic_bank_export.xlsx'),
+            'has_header' => true,
+            'date_column' => 0,
+            'name_column' => 1,
+            'amount_column' => 2,
+            'category_column' => 3,
+            'date_format' => 'Y-m-d',
+            'default_currency' => 'RSD',
+            'kind_mode' => 'fixed',
+            'default_kind' => 'expense',
+        ]);
+
+        $response->assertOk();
+        $response->assertJson(['imported' => 4, 'skipped' => 0]);
+
+        $julyExpenses = json_decode(
+            BudgetData::where(['user_id' => $user->id, 'key' => 'expense-items', 'period' => '2026-07'])->value('value'),
+            true
+        );
+        $this->assertCount(2, $julyExpenses);
+        $this->assertTrue(collect($julyExpenses)->contains('name', 'Rent payment'));
+    }
+
     public function test_commit_includes_duplicates_when_explicitly_requested(): void
     {
         $user = User::factory()->create();

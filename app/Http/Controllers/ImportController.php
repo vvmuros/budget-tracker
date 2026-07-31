@@ -6,11 +6,14 @@ use App\Models\BudgetData;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 
 /**
- * Column-mapped CSV import — deliberately format-agnostic (no bespoke parser
- * per app) since export formats vary and change between apps/versions. The
- * user maps whichever columns their file has to date/name/amount/etc.
+ * Column-mapped CSV/Excel import — deliberately format-agnostic (no bespoke
+ * parser per app) since export formats vary and change between apps/
+ * versions. The user maps whichever columns their file has to date/name/
+ * amount/etc.
  */
 class ImportController extends Controller
 {
@@ -19,10 +22,10 @@ class ImportController extends Controller
     public function preview(Request $request)
     {
         $request->validate([
-            'file' => ['required', 'file', 'max:5120'],
+            'file' => ['required', 'file', 'max:5120', 'mimes:csv,txt,xls,xlsx'],
         ]);
 
-        $rows = $this->readCsv($request->file('file'));
+        $rows = $this->readRows($request->file('file'));
         if (empty($rows)) {
             return response()->json(['error' => 'Empty file.'], 422);
         }
@@ -82,7 +85,7 @@ class ImportController extends Controller
     public function commit(Request $request)
     {
         $data = $request->validate([
-            'file' => ['required', 'file', 'max:5120'],
+            'file' => ['required', 'file', 'max:5120', 'mimes:csv,txt,xls,xlsx'],
             'has_header' => ['required', 'boolean'],
             'date_column' => ['required', 'integer', 'min:0'],
             'name_column' => ['required', 'integer', 'min:0'],
@@ -98,7 +101,7 @@ class ImportController extends Controller
 
         $includeDuplicates = (bool) ($data['include_duplicates'] ?? false);
 
-        $rows = $this->readCsv($request->file('file'));
+        $rows = $this->readRows($request->file('file'));
         if ($data['has_header']) {
             array_shift($rows);
         }
@@ -342,6 +345,16 @@ class ImportController extends Controller
     }
 
     /** @return array<int, array<int, string>> */
+    private function readRows(UploadedFile $file): array
+    {
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        return in_array($extension, ['xls', 'xlsx'], true)
+            ? $this->readExcel($file)
+            : $this->readCsv($file);
+    }
+
+    /** @return array<int, array<int, string>> */
     private function readCsv(UploadedFile $file): array
     {
         $handle = fopen($file->getRealPath(), 'r');
@@ -350,6 +363,42 @@ class ImportController extends Controller
             $rows[] = $row;
         }
         fclose($handle);
+
+        return $rows;
+    }
+
+    /**
+     * Bank/wallet-app spreadsheet exports (.xls/.xlsx) get normalized to the
+     * same plain string rows the CSV path produces, so every date/amount/
+     * name parsing rule downstream works identically regardless of source
+     * format. Cells that are genuinely typed as dates (not just text that
+     * looks like one) are converted straight to Y-m-d — Excel stores those
+     * as a serial number, not the text the user sees, so the normal
+     * "guess the date format from the string" logic doesn't apply to them.
+     *
+     * @return array<int, array<int, string>>
+     */
+    private function readExcel(UploadedFile $file): array
+    {
+        $spreadsheet = IOFactory::load($file->getRealPath());
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $rows = [];
+        foreach ($sheet->getRowIterator() as $row) {
+            $cells = [];
+            $cellIterator = $row->getCellIterator();
+            $cellIterator->setIterateOnlyExistingCells(false);
+
+            foreach ($cellIterator as $cell) {
+                if ($cell->getValue() !== null && ExcelDate::isDateTime($cell)) {
+                    $cells[] = ExcelDate::excelToDateTimeObject($cell->getValue())->format('Y-m-d');
+                } else {
+                    $cells[] = trim((string) $cell->getFormattedValue());
+                }
+            }
+
+            $rows[] = $cells;
+        }
 
         return $rows;
     }

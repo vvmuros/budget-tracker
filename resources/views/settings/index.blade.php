@@ -134,13 +134,13 @@ $lang = request()->cookie('lang', 'sr');
     </div>
 
     <div class="card">
-      <h2>{{ $lang === 'en' ? 'Import from CSV' : 'Uvoz iz CSV-a' }}</h2>
+      <h2>{{ $lang === 'en' ? 'Import from CSV/Excel' : 'Uvoz iz CSV/Excel fajla' }}</h2>
       <p class="hint">
         {{ $lang === 'en'
-          ? 'Export your data from another budgeting app or your bank as CSV, then map its columns here. Works with any CSV — you choose which column is which.'
-          : 'Izvezi podatke iz druge budžet aplikacije ili banke kao CSV, pa ovde mapiraj kolone. Radi sa bilo kojim CSV-om — ti biraš koja kolona je šta.' }}
+          ? 'Export your data from another budgeting app or your bank as CSV or Excel (.xls/.xlsx), then map its columns here. Works with any file — you choose which column is which.'
+          : 'Izvezi podatke iz druge budžet aplikacije ili banke kao CSV ili Excel (.xls/.xlsx), pa ovde mapiraj kolone. Radi sa bilo kojim fajlom — ti biraš koja kolona je šta.' }}
       </p>
-      <input type="file" id="import-file" accept=".csv,text/csv">
+      <input type="file" id="import-file" accept=".csv,text/csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
 
       <div id="import-mapping" hidden style="margin-top:14px;">
         <div class="row"><span class="hint" style="margin:0;">{{ $lang === 'en' ? 'Date column' : 'Kolona datuma' }}</span><select id="map-date"></select></div>
@@ -335,7 +335,7 @@ $lang = request()->cookie('lang', 'sr');
     (function(){
       var t = {
         selectColumn: {{ Illuminate\Support\Js::from($lang === 'en' ? '— none —' : '— nema —') }},
-        readError: {{ Illuminate\Support\Js::from($lang === 'en' ? "Couldn't read that file. Is it a valid CSV?" : 'Nisam mogao da pročitam fajl. Da li je validan CSV?') }},
+        readError: {{ Illuminate\Support\Js::from($lang === 'en' ? "Couldn't read that file. Is it a valid CSV or Excel file?" : 'Nisam mogao da pročitam fajl. Da li je validan CSV ili Excel fajl?') }},
         importing: {{ Illuminate\Support\Js::from($lang === 'en' ? 'Importing…' : 'Uvozim…') }},
         importError: {{ Illuminate\Support\Js::from($lang === 'en' ? 'Import failed. Check your column choices and try again.' : 'Uvoz nije uspeo. Proveri izbor kolona i probaj ponovo.') }},
       };
