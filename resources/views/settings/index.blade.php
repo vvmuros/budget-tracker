@@ -142,6 +142,19 @@ $lang = request()->cookie('lang', 'sr');
       </p>
       <input type="file" id="import-file" accept=".csv,text/csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
 
+      <div id="import-raw-preview-wrap" hidden style="margin-top:12px;">
+        <p class="hint">
+          {{ $lang === 'en'
+            ? 'Some bank exports have a few rows of logo/account info before the real table. Check the row numbers below and adjust if the columns look wrong.'
+            : 'Neki izvodi iz banke imaju par redova sa logom/brojem računa pre prave tabele. Proveri brojeve redova ispod i podesi ako kolone izgledaju pogrešno.' }}
+        </p>
+        <div id="import-raw-preview" style="overflow-x:auto; max-height:220px; overflow-y:auto;"></div>
+        <div class="row" style="margin-top:8px;">
+          <span class="hint" style="margin:0;">{{ $lang === 'en' ? 'Data starts at row' : 'Podaci počinju od reda' }}</span>
+          <input type="number" id="skip-rows" min="1" style="max-width:90px;">
+        </div>
+      </div>
+
       <div id="import-mapping" hidden style="margin-top:14px;">
         <div class="row"><span class="hint" style="margin:0;">{{ $lang === 'en' ? 'Date column' : 'Kolona datuma' }}</span><select id="map-date"></select></div>
         <div class="row"><span class="hint" style="margin:0;">{{ $lang === 'en' ? 'Name/description column' : 'Kolona naziva/opisa' }}</span><select id="map-name"></select></div>
@@ -390,6 +403,9 @@ $lang = request()->cookie('lang', 'sr');
       var commitBtn = document.getElementById('import-commit-btn');
       var kindModeSelect = document.getElementById('kind-mode');
       var fixedKindRow = document.getElementById('fixed-kind-row');
+      var rawPreviewWrap = document.getElementById('import-raw-preview-wrap');
+      var rawPreview = document.getElementById('import-raw-preview');
+      var skipRowsInput = document.getElementById('skip-rows');
 
       var columnSelects = {
         date: document.getElementById('map-date'),
@@ -408,15 +424,60 @@ $lang = request()->cookie('lang', 'sr');
         importStatus.classList.toggle('err', !!isError);
       }
 
-      fileInput.addEventListener('change', function(){
+      function buildSimpleTable(headerRow, dataRows, rowNumberOffset){
+        var table = document.createElement('table');
+        table.style.width = '100%';
+        table.style.fontSize = '11.5px';
+        table.style.borderCollapse = 'collapse';
+
+        if (headerRow) {
+          var thead = document.createElement('tr');
+          if (rowNumberOffset !== undefined) thead.appendChild(document.createElement('th'));
+          headerRow.forEach(function(h){
+            var th = document.createElement('th');
+            th.textContent = h;
+            th.style.textAlign = 'left';
+            th.style.padding = '4px 6px';
+            th.style.borderBottom = '1px solid var(--border)';
+            thead.appendChild(th);
+          });
+          table.appendChild(thead);
+        }
+
+        dataRows.forEach(function(row, i){
+          var tr = document.createElement('tr');
+          if (rowNumberOffset !== undefined) {
+            var rowNumTd = document.createElement('td');
+            rowNumTd.textContent = rowNumberOffset + i;
+            rowNumTd.style.padding = '4px 6px';
+            rowNumTd.style.borderBottom = '1px solid var(--border)';
+            rowNumTd.style.color = 'var(--muted, #888)';
+            tr.appendChild(rowNumTd);
+          }
+          row.forEach(function(cell){
+            var td = document.createElement('td');
+            td.textContent = cell;
+            td.style.padding = '4px 6px';
+            td.style.borderBottom = '1px solid var(--border)';
+            tr.appendChild(td);
+          });
+          table.appendChild(tr);
+        });
+
+        return table;
+      }
+
+      function fetchPreview(explicitSkipRows){
         var file = fileInput.files[0];
         if (!file) return;
 
         setImportStatus('', false);
-        mappingBox.hidden = true;
 
         var body = new FormData();
         body.append('file', file);
+        if (explicitSkipRows !== undefined && explicitSkipRows !== null && explicitSkipRows !== '') {
+          body.append('skip_rows', explicitSkipRows);
+        }
 
         fetch('/api/import/preview', {
           method: 'POST',
@@ -426,6 +487,11 @@ $lang = request()->cookie('lang', 'sr');
           if (!res.ok) throw new Error('preview failed');
           return res.json();
         }).then(function(data){
+          rawPreview.innerHTML = '';
+          rawPreview.appendChild(buildSimpleTable(null, data.raw_preview_rows, 1));
+          rawPreviewWrap.hidden = false;
+          skipRowsInput.value = data.skip_rows + 1;
+
           Object.keys(columnSelects).forEach(function(key){
             var select = columnSelects[key];
             select.innerHTML = '';
@@ -443,33 +509,8 @@ $lang = request()->cookie('lang', 'sr');
             });
           });
 
-          var table = document.createElement('table');
-          table.style.width = '100%';
-          table.style.fontSize = '11.5px';
-          table.style.borderCollapse = 'collapse';
-          var thead = document.createElement('tr');
-          data.headers.forEach(function(h){
-            var th = document.createElement('th');
-            th.textContent = h;
-            th.style.textAlign = 'left';
-            th.style.padding = '4px 6px';
-            th.style.borderBottom = '1px solid var(--border)';
-            thead.appendChild(th);
-          });
-          table.appendChild(thead);
-          data.sample_rows.forEach(function(row){
-            var tr = document.createElement('tr');
-            row.forEach(function(cell){
-              var td = document.createElement('td');
-              td.textContent = cell;
-              td.style.padding = '4px 6px';
-              td.style.borderBottom = '1px solid var(--border)';
-              tr.appendChild(td);
-            });
-            table.appendChild(tr);
-          });
           previewWrap.innerHTML = '';
-          previewWrap.appendChild(table);
+          previewWrap.appendChild(buildSimpleTable(data.headers, data.sample_rows));
 
           if (data.detected_date_column !== null && data.detected_date_column !== undefined) {
             columnSelects.date.value = data.detected_date_column;
@@ -482,6 +523,18 @@ $lang = request()->cookie('lang', 'sr');
         }).catch(function(){
           setImportStatus(t.readError, true);
         });
+      }
+
+      fileInput.addEventListener('change', function(){
+        mappingBox.hidden = true;
+        rawPreviewWrap.hidden = true;
+        fetchPreview();
+      });
+
+      skipRowsInput.addEventListener('change', function(){
+        var value = parseInt(skipRowsInput.value, 10);
+        if (isNaN(value) || value < 1) value = 1;
+        fetchPreview(value - 1);
       });
 
       function buildCommitBody(file, includeDuplicates){
@@ -498,6 +551,8 @@ $lang = request()->cookie('lang', 'sr');
         body.append('kind_mode', kindModeSelect.value);
         if (kindModeSelect.value === 'fixed') body.append('default_kind', document.getElementById('default-kind').value);
         if (includeDuplicates) body.append('include_duplicates', '1');
+        var skipRowsValue = parseInt(skipRowsInput.value, 10);
+        body.append('skip_rows', (!isNaN(skipRowsValue) && skipRowsValue >= 1) ? (skipRowsValue - 1) : 0);
         return body;
       }
 

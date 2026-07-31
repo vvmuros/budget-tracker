@@ -262,6 +262,58 @@ class CsvImportTest extends TestCase
         $response->assertJson(['imported' => 2, 'skipped' => 2, 'skip_reasons' => ['duplicate' => 2]]);
     }
 
+    public function test_preview_auto_detects_where_the_real_table_starts_past_a_bank_export_preamble(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->postJson('/api/import/preview', [
+            'file' => $this->fixture('bank_export_with_preamble.xlsx'),
+        ]);
+
+        $response->assertOk();
+        // Row index 9 (0-based) is the real "DATUM,TIP TRANSAKCIJE,OPIS,IZNOS" header —
+        // everything before it is logo/account-number/date-range metadata.
+        $response->assertJson([
+            'skip_rows' => 9,
+            'headers' => ['DATUM', 'TIP TRANSAKCIJE', 'OPIS', 'IZNOS'],
+            'total_rows' => 5,
+            'detected_date_column' => 0,
+            'detected_date_format' => 'd.m.Y',
+        ]);
+    }
+
+    public function test_commit_uses_the_auto_detected_skip_rows_to_import_past_a_bank_export_preamble(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->postJson('/api/import/commit', [
+            'file' => $this->fixture('bank_export_with_preamble.xlsx'),
+            'has_header' => true,
+            'date_column' => 0,
+            'name_column' => 2,
+            'amount_column' => 3,
+            'date_format' => 'd.m.Y',
+            'default_currency' => 'RSD',
+            'kind_mode' => 'sign',
+            'skip_rows' => 9,
+        ]);
+
+        $response->assertOk();
+        $response->assertJson(['imported' => 5, 'skipped' => 0]);
+
+        $julyExpenses = json_decode(
+            BudgetData::where(['user_id' => $user->id, 'key' => 'expense-items', 'period' => '2026-07'])->value('value'),
+            true
+        );
+        $this->assertCount(4, $julyExpenses);
+
+        $julyIncome = json_decode(
+            BudgetData::where(['user_id' => $user->id, 'key' => 'income-items', 'period' => '2026-07'])->value('value'),
+            true
+        );
+        $this->assertCount(1, $julyIncome);
+    }
+
     public function test_preview_and_commit_work_with_an_xlsx_file_the_same_as_csv(): void
     {
         $user = User::factory()->create();

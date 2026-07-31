@@ -23,11 +23,23 @@ class ImportController extends Controller
     {
         $request->validate([
             'file' => ['required', 'file', 'max:5120', 'mimes:csv,txt,xls,xlsx'],
+            'skip_rows' => ['nullable', 'integer', 'min:0'],
         ]);
 
-        $rows = $this->readRows($request->file('file'));
-        if (empty($rows)) {
+        $allRows = $this->readRows($request->file('file'));
+        if (empty($allRows)) {
             return response()->json(['error' => 'Empty file.'], 422);
+        }
+
+        $rawPreviewRows = array_slice($allRows, 0, 20);
+
+        $skipRows = $request->filled('skip_rows')
+            ? (int) $request->input('skip_rows')
+            : $this->detectDataStart($allRows);
+
+        $rows = array_slice($allRows, $skipRows);
+        if (empty($rows)) {
+            return response()->json(['error' => 'skip_rows leaves no data.'], 422);
         }
 
         $headers = array_shift($rows);
@@ -41,7 +53,51 @@ class ImportController extends Controller
             'total_rows' => count($rows),
             'detected_date_column' => $detectedColumn,
             'detected_date_format' => $detectedFormat,
+            'skip_rows' => $skipRows,
+            'raw_preview_rows' => $rawPreviewRows,
         ]);
+    }
+
+    /**
+     * Real bank/wallet exports often have a few rows of branding, account
+     * number, and date-range metadata before the actual table starts (seen
+     * first-hand with a Banka Intesa .xls export) — plain "first row is the
+     * header" parsing misreads that preamble as the header/data entirely.
+     * This looks for the smallest number of rows to skip such that the
+     * following rows have a column that parses as a real date consistently —
+     * that's a strong signal the real transaction table has begun. Falls
+     * back to 0 (today's existing behavior) if nothing better is found.
+     */
+    private function detectDataStart(array $rows): int
+    {
+        $formats = ['Y-m-d', 'd/m/Y', 'm/d/Y', 'd.m.Y'];
+        $maxSkip = min(30, count($rows) - 1);
+
+        for ($skip = 0; $skip <= $maxSkip; $skip++) {
+            $sample = array_slice($rows, $skip + 1, 5);
+            if (count($sample) < 3) {
+                continue;
+            }
+
+            $numCols = count($rows[$skip] ?? []);
+            for ($col = 0; $col < $numCols; $col++) {
+                foreach ($formats as $format) {
+                    $allMatch = true;
+                    foreach ($sample as $row) {
+                        $value = trim($row[$col] ?? '');
+                        if ($value === '' || ! \DateTime::createFromFormat('!'.$format, $value)) {
+                            $allMatch = false;
+                            break;
+                        }
+                    }
+                    if ($allMatch) {
+                        return $skip;
+                    }
+                }
+            }
+        }
+
+        return 0;
     }
 
     /**
@@ -97,11 +153,13 @@ class ImportController extends Controller
             'kind_mode' => ['required', 'string', 'in:sign,fixed'],
             'default_kind' => ['required_if:kind_mode,fixed', 'nullable', 'string', 'in:expense,income'],
             'include_duplicates' => ['nullable', 'boolean'],
+            'skip_rows' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $includeDuplicates = (bool) ($data['include_duplicates'] ?? false);
 
         $rows = $this->readRows($request->file('file'));
+        $rows = array_slice($rows, (int) ($data['skip_rows'] ?? 0));
         if ($data['has_header']) {
             array_shift($rows);
         }
