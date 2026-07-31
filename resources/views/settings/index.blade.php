@@ -81,6 +81,11 @@ $lang = request()->cookie('lang', 'sr');
     font-family:'Inter',sans-serif; font-size:12.5px; color:var(--ink);
     background:transparent; border:1px solid var(--border); border-radius:8px; padding:6px 8px;
   }
+  /* The dropdown's own closed face inherits background:transparent fine, but
+     the open option list is rendered natively and does not — without this it
+     silently defaults to a white popup, making --ink's light dark-mode text
+     unreadable (white-on-white). */
+  select option{ background:var(--card); color:var(--ink); }
   input[type=password]{
     font-family:'Inter',sans-serif; font-size:13px; padding:8px 10px; background:transparent;
     border:1px solid var(--border); color:var(--ink); border-radius:8px; flex:1; min-width:160px;
@@ -92,6 +97,9 @@ $lang = request()->cookie('lang', 'sr');
     border:1px solid var(--border); border-radius:8px; color:var(--ink);
   }
   .lang-links a.active{ border-color:var(--gilt); color:var(--gilt); font-weight:600; }
+  .modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:1000; }
+  .modal-overlay[hidden]{ display:none; }
+  .modal-card{ background:var(--card); border:1px solid var(--border); border-radius:12px; padding:24px; max-width:360px; width:90%; color:var(--ink); }
 </style>
 </head>
 <body>
@@ -225,8 +233,8 @@ $lang = request()->cookie('lang', 'sr');
     </div>
   </div>
 
-  <div id="delete-confirm-modal" hidden style="position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:1000;">
-    <div style="background:var(--card-bg,#1a1a2e); border-radius:12px; padding:24px; max-width:360px; width:90%;">
+  <div id="delete-confirm-modal" class="modal-overlay" hidden>
+    <div class="modal-card">
       <p style="margin:0 0 12px;">
         {{ $lang === 'en'
           ? 'This permanently deletes your account and every ledger entry you have saved. This cannot be undone.'
