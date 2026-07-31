@@ -180,8 +180,7 @@ class ImportController extends Controller
             $amountRaw = trim($row[$data['amount_column']] ?? '');
 
             $date = \DateTime::createFromFormat('!'.$dateFormat, $dateRaw);
-            $cleanedAmount = preg_replace('/[^0-9.\-]/', '', str_replace(',', '', $amountRaw));
-            $amount = is_numeric($cleanedAmount) ? (float) $cleanedAmount : 0.0;
+            $amount = $this->parseAmount($amountRaw) ?? 0.0;
 
             if (! $date || $amount === 0.0 || $name === '') {
                 $skipped++;
@@ -325,6 +324,45 @@ class ImportController extends Controller
         }
 
         return $requestedFormat;
+    }
+
+    /**
+     * "1.448,94" (dot = thousands, comma = decimal — Serbian/most-of-Europe
+     * banks, including the Banca Intesa export this was built against) and
+     * "1,448.94" (comma = thousands, dot = decimal — US-style) both show up
+     * in the wild, plus plenty of exports with no thousands separator at
+     * all. Blindly stripping commas (the old behavior) silently mangled
+     * amounts like "129,99" into 12999 instead of skipping or erroring —
+     * wrong by 100x with no signal anything went wrong. Whichever separator
+     * is a currency's decimal point comes last and is followed by 1-2
+     * digits (no real currency has 3 decimal places); a separator followed
+     * by exactly 3 digits is a thousands grouping and gets dropped instead.
+     */
+    private function parseAmount(string $raw): ?float
+    {
+        $value = preg_replace('/[^0-9,.\-]/', '', $raw);
+        if ($value === null || $value === '' || $value === '-') {
+            return null;
+        }
+
+        $lastComma = strrpos($value, ',');
+        $lastDot = strrpos($value, '.');
+
+        if ($lastComma !== false && $lastDot !== false) {
+            if ($lastComma > $lastDot) {
+                $value = str_replace(',', '.', str_replace('.', '', $value));
+            } else {
+                $value = str_replace(',', '', $value);
+            }
+        } elseif ($lastComma !== false) {
+            $value = strlen($value) - $lastComma - 1 === 3
+                ? str_replace(',', '', $value)
+                : str_replace(',', '.', $value);
+        } elseif ($lastDot !== false && strlen($value) - $lastDot - 1 === 3) {
+            $value = str_replace('.', '', $value);
+        }
+
+        return is_numeric($value) ? (float) $value : null;
     }
 
     private function allRowsParseWithFormat(array $rows, int $dateColumn, string $format): bool

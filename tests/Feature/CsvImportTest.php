@@ -306,12 +306,48 @@ class CsvImportTest extends TestCase
             true
         );
         $this->assertCount(4, $julyExpenses);
+        // These came from the fixture as European-style comma-decimal strings
+        // ("-1448,94" etc.) — if the amount parser mishandled the comma these
+        // would come out 100x too large instead of matching the source figures.
+        $amounts = collect($julyExpenses)->pluck('amount')->sort()->values()->all();
+        $this->assertEquals([129.99, 1448.94, 1507.80, 20000.0], $amounts);
 
         $julyIncome = json_decode(
             BudgetData::where(['user_id' => $user->id, 'key' => 'income-items', 'period' => '2026-07'])->value('value'),
             true
         );
         $this->assertCount(1, $julyIncome);
+        $this->assertEquals(46620.0, $julyIncome[0]['amount']);
+    }
+
+    public function test_commit_parses_european_and_us_style_decimal_amounts_correctly(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->postJson('/api/import/commit', [
+            'file' => $this->fixture('amount_formats.csv'),
+            'has_header' => true,
+            'date_column' => 0,
+            'name_column' => 1,
+            'amount_column' => 2,
+            'date_format' => 'Y-m-d',
+            'default_currency' => 'RSD',
+            'kind_mode' => 'sign',
+        ]);
+
+        $response->assertOk();
+        $response->assertJson(['imported' => 4, 'skipped' => 0]);
+
+        $julyExpenses = json_decode(
+            BudgetData::where(['user_id' => $user->id, 'key' => 'expense-items', 'period' => '2026-07'])->value('value'),
+            true
+        );
+        $byName = collect($julyExpenses)->keyBy('name');
+
+        $this->assertEquals(129.99, $byName['EU decimal comma small']['amount']);
+        $this->assertEquals(1448.94, $byName['EU decimal comma with thousands dot']['amount']);
+        $this->assertEquals(1448.94, $byName['US decimal dot with thousands comma']['amount']);
+        $this->assertEquals(2000.0, $byName['No separator']['amount']);
     }
 
     public function test_preview_and_commit_work_with_an_xlsx_file_the_same_as_csv(): void

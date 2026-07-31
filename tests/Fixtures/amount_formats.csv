@@ -1,0 +1,5 @@
+date,name,amount
+2026-07-01,EU decimal comma small,"-129,99"
+2026-07-02,EU decimal comma with thousands dot,"-1.448,94"
+2026-07-03,US decimal dot with thousands comma,"-1,448.94"
+2026-07-04,No separator,-2000
