@@ -1404,15 +1404,19 @@ const incThis = computed(() => income.reduce((sum, it) => {
   const rsd = toRSD(it.amount, it.currency);
   return sum + rsd - divertedForIncome(it.id, rsd);
 }, 0));
+// One-time (freq === 0) items are excluded here — they're a single event,
+// not a pattern to extrapolate, so folding their full amount into a
+// "monthly average" every month forever (until deleted) overstated it
+// hugely whenever a lot of one-off spending had just been logged.
 const expAvg = computed(() => expenses.reduce((sum, it) => {
-  if (!it.active || (it.endPeriod && currentPeriod.value > it.endPeriod)) return sum;
+  if (!it.active || it.freq === 0 || it.paidFromSavings || (it.endPeriod && currentPeriod.value > it.endPeriod)) return sum;
   const r = toRSD(it.amount, it.currency);
-  return sum + (it.freq > 0 ? r / it.freq : r);
+  return sum + r / it.freq;
 }, 0));
 const incAvg = computed(() => income.reduce((sum, it) => {
-  if (!it.active || (it.endPeriod && currentPeriod.value > it.endPeriod)) return sum;
+  if (!it.active || it.freq === 0 || (it.endPeriod && currentPeriod.value > it.endPeriod)) return sum;
   const r = toRSD(it.amount, it.currency);
-  return sum + (it.freq > 0 ? r / it.freq : r);
+  return sum + r / it.freq;
 }, 0));
 const savTotal = computed(() => savings.reduce((sum, it) => sum + toRSD(it.amount, it.currency), 0));
 const netThis = computed(() => incThis.value - expThis.value);
