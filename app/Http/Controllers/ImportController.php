@@ -180,6 +180,16 @@ class ImportController extends Controller
             $name = trim($row[$data['name_column']] ?? '');
             $amountRaw = trim($row[$data['amount_column']] ?? '');
 
+            // Excel/bank exports routinely have trailing blank rows well past
+            // the real data (a formatted-but-empty "used range" from a
+            // template, seen first-hand — 907 of them in one real export).
+            // A row with nothing in any mapped column isn't a bad row worth
+            // reporting, it's just not a row — skip it without counting it
+            // as an error so the result doesn't look like something broke.
+            if ($dateRaw === '' && $name === '' && $amountRaw === '') {
+                continue;
+            }
+
             $date = \DateTime::createFromFormat('!'.$dateFormat, $dateRaw);
             $amount = $this->parseAmount($amountRaw) ?? 0.0;
 

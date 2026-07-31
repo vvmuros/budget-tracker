@@ -389,6 +389,33 @@ class CsvImportTest extends TestCase
         $this->assertTrue(collect($julyExpenses)->contains('name', 'Rent payment'));
     }
 
+    public function test_commit_silently_ignores_completely_blank_trailing_rows(): void
+    {
+        $user = User::factory()->create();
+
+        // Mirrors a real bank export where the sheet's "used range" runs
+        // hundreds of rows past the actual data (leftover template
+        // formatting) — those rows have nothing in any mapped column and
+        // shouldn't be reported as broken/skipped, just ignored.
+        $response = $this->actingAs($user)->postJson('/api/import/commit', [
+            'file' => $this->fixture('trailing_blank_rows.csv'),
+            'has_header' => true,
+            'date_column' => 0,
+            'name_column' => 1,
+            'amount_column' => 2,
+            'date_format' => 'Y-m-d',
+            'default_currency' => 'RSD',
+            'kind_mode' => 'sign',
+        ]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'imported' => 2,
+            'skipped' => 0,
+            'skip_reasons' => ['invalid_date' => 0, 'invalid_amount' => 0, 'empty_name' => 0, 'duplicate' => 0],
+        ]);
+    }
+
     public function test_commit_includes_duplicates_when_explicitly_requested(): void
     {
         $user = User::factory()->create();
