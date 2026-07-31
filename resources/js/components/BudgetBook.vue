@@ -287,9 +287,9 @@
                   </td>
                   <td class="chk-col" :data-label="t('active')"><input type="checkbox" v-model="item.active" @change="saveExpenses"></td>
                   <td class="source-col" :data-label="t('pullFromSavingsColumn')">
-                    <select v-if="savings.length" :value="item.paidFromSavings ? item.paidFromSavings.savingsId : ''" @change="onExpenseSourceChange(item, $event)">
+                    <select v-if="visibleSavings.length" :value="item.paidFromSavings ? item.paidFromSavings.savingsId : ''" @change="onExpenseSourceChange(item, $event)">
                       <option value="">{{ t('savingsSourceNone') }}</option>
-                      <option v-for="s in savings" :key="s.id" :value="s.id">{{ s.name }}</option>
+                      <option v-for="s in visibleSavings" :key="s.id" :value="s.id">{{ s.name }}</option>
                     </select>
                   </td>
                   <td class="del-col"><button class="del-btn" @click="removeExpenseRow(item)" :aria-label="t('deleteRow')"><svg viewBox="0 0 16 16" class="icon"><path d="M4 4 L12 12 M12 4 L4 12" /></svg></button></td>
@@ -1077,7 +1077,7 @@ async function loadState(period) {
 }
 
 function confirmBanner() {
-  savings.push({ name: t('transferredFrom') + bannerPreviousLabel.value, amount: Math.round(bannerAmount.value) || 0, currency: 'RSD', category: 'Štednja' });
+  savings.push({ id: generateId(), name: t('transferredFrom') + bannerPreviousLabel.value, amount: Math.round(bannerAmount.value) || 0, currency: 'RSD', category: 'Štednja', createdAt: Date.now(), startPeriod: currentPeriod.value });
   saveSavings();
   bannerVisible.value = false;
   dismissedPeriods.add(currentPeriod.value);
@@ -1176,7 +1176,7 @@ function confirmQuickAdd() {
     saveIncome();
     flashNewItem(item);
   } else if (qa.kind === 'savings') {
-    const item = { ...base, category: 'Ostalo' };
+    const item = { ...base, category: 'Ostalo', startPeriod: currentPeriod.value };
     savings.push(item);
     saveSavings();
     flashNewItem(item);
@@ -1395,7 +1395,15 @@ const visibleIncome = computed(() => {
   return showOneTimeIncome.value ? [...recurring, ...oneTime] : recurring;
 });
 
-const sortedSavings = computed(() => savings.slice().sort(byNewestFirst));
+// Savings/assets are stored as a single list shared across every month
+// (unlike expenses/income, which are per-period) — a running balance rather
+// than a monthly reset. Without startPeriod, an item added while viewing
+// August would also show up retroactively in July, which read as data
+// randomly changing. Items saved before this existed have no startPeriod
+// and stay visible everywhere (nothing should vanish for existing users).
+const visibleSavings = computed(() => savings.filter(s => !s.startPeriod || s.startPeriod <= currentPeriod.value));
+
+const sortedSavings = computed(() => visibleSavings.value.slice().sort(byNewestFirst));
 
 const expThis = computed(() => expenses.reduce((sum, it) => (isExpenseActive(it) && !it.paidFromSavings) ? sum + toRSD(it.amount, it.currency) : sum, 0));
 const recurringExpTotal = computed(() => expenses.reduce((sum, it) => (isExpenseActive(it) && it.freq !== 0 && !it.paidFromSavings) ? sum + toRSD(it.amount, it.currency) : sum, 0));
@@ -1418,7 +1426,7 @@ const incAvg = computed(() => income.reduce((sum, it) => {
   const r = toRSD(it.amount, it.currency);
   return sum + r / it.freq;
 }, 0));
-const savTotal = computed(() => savings.reduce((sum, it) => sum + toRSD(it.amount, it.currency), 0));
+const savTotal = computed(() => visibleSavings.value.reduce((sum, it) => sum + toRSD(it.amount, it.currency), 0));
 const netThis = computed(() => incThis.value - expThis.value);
 const netAvg = computed(() => incAvg.value - expAvg.value);
 
@@ -1704,7 +1712,7 @@ async function applyChatAction(msg) {
       saveIncome();
     }
   } else if (action === 'add_saving') {
-    savings.push({ id: generateId(), name, amount, currency, category: category || 'Ostalo', createdAt: Date.now() });
+    savings.push({ id: generateId(), name, amount, currency, category: category || 'Ostalo', createdAt: Date.now(), startPeriod: targetPeriod || currentPeriod.value });
     saveSavings();
   }
   msg.confirm = null;
