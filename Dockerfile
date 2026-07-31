@@ -9,10 +9,12 @@ RUN npm run build
 
 FROM php:8.1-cli-alpine
 
-RUN apk add --no-cache postgresql-dev libpq oniguruma-dev \
-    && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
-    && docker-php-ext-install pdo_pgsql pgsql mbstring bcmath \
-    && apk del .build-deps
+RUN apk add --no-cache postgresql-dev libpq oniguruma-dev libpng-dev libjpeg-turbo-dev freetype-dev libzip-dev \
+      && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
+      && docker-php-ext-configure gd --with-freetype --with-jpeg \
+      && docker-php-ext-install pdo_pgsql pgsql mbstring bcmath gd zip \
+      && apk del .build-deps
+
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
