@@ -55,6 +55,7 @@ class ImportController extends Controller
             'detected_date_format' => $detectedFormat,
             'skip_rows' => $skipRows,
             'raw_preview_rows' => $rawPreviewRows,
+            'raw_total_rows' => count($allRows),
         ]);
     }
 

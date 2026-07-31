@@ -148,6 +148,7 @@ $lang = request()->cookie('lang', 'sr');
             ? 'Some bank exports have a few rows of logo/account info before the real table. Check the row numbers below and adjust if the columns look wrong.'
             : 'Neki izvodi iz banke imaju par redova sa logom/brojem računa pre prave tabele. Proveri brojeve redova ispod i podesi ako kolone izgledaju pogrešno.' }}
         </p>
+        <p class="hint" id="import-raw-preview-count"></p>
         <div id="import-raw-preview" style="overflow-x:auto; max-height:220px; overflow-y:auto;"></div>
         <div class="row" style="margin-top:8px;">
           <span class="hint" style="margin:0;">{{ $lang === 'en' ? 'Data starts at row' : 'Podaci počinju od reda' }}</span>
@@ -405,7 +406,16 @@ $lang = request()->cookie('lang', 'sr');
       var fixedKindRow = document.getElementById('fixed-kind-row');
       var rawPreviewWrap = document.getElementById('import-raw-preview-wrap');
       var rawPreview = document.getElementById('import-raw-preview');
+      var rawPreviewCount = document.getElementById('import-raw-preview-count');
       var skipRowsInput = document.getElementById('skip-rows');
+
+      // Number inputs change value on mouse-wheel scroll in most browsers —
+      // easy to trigger by accident while scrolling the raw-preview table
+      // right above it (this is exactly what turned an auto-detected 10
+      // into 20 during testing). Blur on wheel so scrolling never touches it.
+      skipRowsInput.addEventListener('wheel', function(){
+        skipRowsInput.blur();
+      });
 
       var columnSelects = {
         date: document.getElementById('map-date'),
@@ -491,6 +501,14 @@ $lang = request()->cookie('lang', 'sr');
           rawPreview.appendChild(buildSimpleTable(null, data.raw_preview_rows, 1));
           rawPreviewWrap.hidden = false;
           skipRowsInput.value = data.skip_rows + 1;
+
+          var shown = data.raw_preview_rows.length;
+          rawPreviewCount.textContent = shown < data.raw_total_rows
+            ? ({{ Illuminate\Support\Js::from($lang === 'en' ? 'Showing the first' : 'Prikazano prvih') }}
+                + ' ' + shown + ' ' + ({{ Illuminate\Support\Js::from($lang === 'en' ? 'of' : 'od') }})
+                + ' ' + data.raw_total_rows
+                + ' ' + ({{ Illuminate\Support\Js::from($lang === 'en' ? 'rows — the entire file is still imported.' : 'redova — ceo fajl se ipak uvozi.') }}))
+            : '';
 
           Object.keys(columnSelects).forEach(function(key){
             var select = columnSelects[key];
