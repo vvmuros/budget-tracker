@@ -189,10 +189,9 @@
                       <option value="custom">{{ t('customInterval') }}</option>
                       <option value="onetime">{{ t('oneTime') }}</option>
                     </select>
-                    <div v-if="item.freq > 1" class="freq-custom">
-                      <span>{{ t('every') }}</span>
-                      <input type="number" min="2" max="24" v-model.number="item.freq" @change="saveIncome" class="freq-interval-input">
-                      <span>{{ t('monthsUnit') }}</span>
+                    <div v-if="freqMode(item) === 'custom'" class="freq-custom">
+                      <span>{{ t('every') }} {{ item.freq }} {{ t('monthsUnit') }}</span>
+                      <input type="range" min="2" max="24" step="1" v-model.number="item.freq" @change="saveIncome" class="freq-interval-slider">
                       <span>{{ t('fromMonth') }}</span>
                       <input type="month" v-model="item.dueAnchor" @change="saveIncome" class="freq-anchor-input">
                     </div>
@@ -254,10 +253,9 @@
                       <option value="custom">{{ t('customInterval') }}</option>
                       <option value="onetime">{{ t('oneTime') }}</option>
                     </select>
-                    <div v-if="item.freq > 1" class="freq-custom">
-                      <span>{{ t('every') }}</span>
-                      <input type="number" min="2" max="24" v-model.number="item.freq" @change="saveExpenses" class="freq-interval-input">
-                      <span>{{ t('monthsUnit') }}</span>
+                    <div v-if="freqMode(item) === 'custom'" class="freq-custom">
+                      <span>{{ t('every') }} {{ item.freq }} {{ t('monthsUnit') }}</span>
+                      <input type="range" min="2" max="24" step="1" v-model.number="item.freq" @change="saveExpenses" class="freq-interval-slider">
                       <span>{{ t('fromMonth') }}</span>
                       <input type="month" v-model="item.dueAnchor" @change="saveExpenses" class="freq-anchor-input">
                     </div>
@@ -2224,12 +2222,10 @@ function switchLangUrl(target) {
 .amt-col{ width:90px; }
 .cur-col{ width:64px; }
 .freq-col{ width:150px; }
-.freq-custom{ display:flex; flex-wrap:wrap; align-items:center; gap:3px; margin-top:4px; font-size:11px; color:var(--ink-light); }
-.freq-interval-input{
-  width:32px; font-family:'Inter',sans-serif; font-size:12px; color:var(--ink);
-  background:transparent; border:none; border-bottom:1px solid var(--border); padding:2px;
+.freq-custom{ display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-top:4px; font-size:11px; color:var(--ink-light); }
+.freq-interval-slider{
+  width:100%; max-width:120px; height:18px; accent-color:var(--gilt); cursor:pointer;
 }
-.freq-interval-input:focus{ outline:none; border-bottom:1px solid var(--gilt); }
 .freq-anchor-input{
   font-family:'Inter',sans-serif; font-size:11px; color:var(--ink); color-scheme:light dark;
   background:transparent; border:none; border-bottom:1px solid var(--border); padding:2px; max-width:100px;

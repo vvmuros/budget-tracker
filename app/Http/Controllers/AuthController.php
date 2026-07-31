@@ -232,12 +232,27 @@ class AuthController extends Controller
     {
         $lang = $request->cookie('lang', 'sr');
 
-        $request->validate(['password' => ['required', 'string']]);
+        // Google-registered accounts get a random, never-shown password at
+        // signup (there's nothing for the user to type), so there's no
+        // password to check server-side — the "type DELETE" modal is their
+        // only deliberate-intent gate, so it's enforced here too, not just
+        // in the UI, in case the form is ever submitted directly.
+        if ($request->user()->google_id) {
+            $request->validate(['confirm_text' => ['required', 'string']]);
 
-        if (! Hash::check($request->input('password'), $request->user()->password)) {
-            return back()->withErrors(['password' => $lang === 'en'
-                ? 'Incorrect password.'
-                : 'Pogrešna lozinka.']);
+            if ($request->input('confirm_text') !== 'DELETE') {
+                return back()->withErrors(['confirm_text' => $lang === 'en'
+                    ? 'Type DELETE to confirm.'
+                    : 'Ukucaj DELETE da potvrdiš.']);
+            }
+        } else {
+            $request->validate(['password' => ['required', 'string']]);
+
+            if (! Hash::check($request->input('password'), $request->user()->password)) {
+                return back()->withErrors(['password' => $lang === 'en'
+                    ? 'Incorrect password.'
+                    : 'Pogrešna lozinka.']);
+            }
         }
 
         $user = $request->user();

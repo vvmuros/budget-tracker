@@ -207,14 +207,39 @@ $lang = request()->cookie('lang', 'sr');
           ? 'This permanently deletes your account and every ledger entry you have saved. This cannot be undone.'
           : 'Ovo trajno briše tvoj nalog i sve unose u knjižici koje si sačuvao. Ovo se ne može poništiti.' }}
       </p>
-      <form method="POST" action="{{ route('account.delete') }}" class="delete-form">
+      <form method="POST" action="{{ route('account.delete') }}" class="delete-form" id="delete-account-form">
         @csrf
-        <input type="password" name="password" placeholder="{{ $lang === 'en' ? 'Confirm your password' : 'Potvrdi lozinku' }}" required autocomplete="current-password">
-        <button type="submit" class="btn-danger" onclick="return confirm('{{ $lang === 'en' ? 'Are you sure? This cannot be undone.' : 'Da li si siguran? Ovo se ne moze ponistiti.' }}')">{{ $lang === 'en' ? 'Permanently delete' : 'Trajno obriši' }}</button>
+        @if(auth()->user()->google_id)
+          <input type="hidden" name="confirm_text" id="confirm-text-field">
+        @else
+          <input type="password" name="password" placeholder="{{ $lang === 'en' ? 'Confirm your password' : 'Potvrdi lozinku' }}" required autocomplete="current-password">
+        @endif
+        <button type="button" class="btn-danger" id="delete-account-btn">{{ $lang === 'en' ? 'Permanently delete' : 'Trajno obriši' }}</button>
         @error('password')
           <div class="status err">{{ $message }}</div>
         @enderror
+        @error('confirm_text')
+          <div class="status err">{{ $message }}</div>
+        @enderror
       </form>
+    </div>
+  </div>
+
+  <div id="delete-confirm-modal" hidden style="position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:1000;">
+    <div style="background:var(--card-bg,#1a1a2e); border-radius:12px; padding:24px; max-width:360px; width:90%;">
+      <p style="margin:0 0 12px;">
+        {{ $lang === 'en'
+          ? 'This permanently deletes your account and every ledger entry you have saved. This cannot be undone.'
+          : 'Ovo trajno briše tvoj nalog i sve unose u knjižici koje si sačuvao. Ovo se ne može poništiti.' }}
+      </p>
+      <p class="hint" style="margin:0 0 8px;">
+        {{ $lang === 'en' ? 'Type DELETE to confirm:' : 'Ukucaj DELETE da potvrdiš:' }}
+      </p>
+      <input type="text" id="delete-confirm-input" autocomplete="off" style="width:100%; margin-bottom:14px;">
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" class="btn-ghost" id="delete-confirm-cancel">{{ $lang === 'en' ? 'Cancel' : 'Otkaži' }}</button>
+        <button type="button" class="btn-danger" id="delete-confirm-submit" disabled>{{ $lang === 'en' ? 'Permanently delete' : 'Trajno obriši' }}</button>
+      </div>
     </div>
   </div>
 
@@ -626,6 +651,38 @@ $lang = request()->cookie('lang', 'sr');
         if (!file) return;
 
         runCommit(file, false);
+      });
+    })();
+
+    (function(){
+      var deleteBtn = document.getElementById('delete-account-btn');
+      var modal = document.getElementById('delete-confirm-modal');
+      var input = document.getElementById('delete-confirm-input');
+      var cancelBtn = document.getElementById('delete-confirm-cancel');
+      var submitBtn = document.getElementById('delete-confirm-submit');
+      var form = document.getElementById('delete-account-form');
+      var hiddenConfirmText = document.getElementById('confirm-text-field');
+      if (!deleteBtn) return;
+
+      function openModal(){
+        input.value = '';
+        submitBtn.disabled = true;
+        modal.hidden = false;
+        input.focus();
+      }
+      function closeModal(){
+        modal.hidden = true;
+      }
+
+      deleteBtn.addEventListener('click', openModal);
+      cancelBtn.addEventListener('click', closeModal);
+      input.addEventListener('input', function(){
+        submitBtn.disabled = input.value !== 'DELETE';
+      });
+      submitBtn.addEventListener('click', function(){
+        if (input.value !== 'DELETE') return;
+        if (hiddenConfirmText) hiddenConfirmText.value = input.value;
+        form.submit();
       });
     })();
 
