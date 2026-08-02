@@ -77,6 +77,31 @@ class PushController extends Controller
         return ['period' => $period, 'notified' => $sentCount];
     }
 
+    /**
+     * Called by the reminders:send-daily scheduled command (see
+     * app/Console/Kernel.php) every evening — a plain nudge to log today's
+     * spending, sent to every subscribed user regardless of period data.
+     */
+    public function sendDailyRemindersToAll(): array
+    {
+        $sentCount = 0;
+
+        User::whereHas('pushSubscriptions')->get()->each(function (User $user) use (&$sentCount) {
+            if ($user->pushSubscriptions->isEmpty()) {
+                return;
+            }
+
+            $this->pushToSubscriptions(
+                $user->pushSubscriptions,
+                'Bilanso',
+                'Jesi li nešto potrošio danas? Otvori Bilanso da upišeš.'
+            );
+            $sentCount++;
+        });
+
+        return ['notified' => $sentCount];
+    }
+
     private function sendReminderToUser(User $user, string $period, string $lang, bool $force): bool
     {
         $subscriptions = $user->pushSubscriptions;

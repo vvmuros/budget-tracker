@@ -51,6 +51,13 @@ class PushSubscriptionTest extends TestCase
         $this->artisan('reminders:send-monthly')->assertSuccessful();
     }
 
+    public function test_daily_reminders_command_runs_successfully(): void
+    {
+        // No users have push subscriptions, so this never attempts an actual
+        // network send — it just confirms the command runs and reports zero.
+        $this->artisan('reminders:send-daily')->assertSuccessful();
+    }
+
     public function test_send_test_reports_nothing_sent_without_a_subscription(): void
     {
         $user = User::factory()->create();
